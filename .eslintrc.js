@@ -1,7 +1,8 @@
 module.exports = {
   root: true,
   parserOptions: {
-    sourceType: 'module'
+    sourceType: 'module',
+    ecmaVersion: 2017
   },
   env: {
     browser: true,
@@ -33,6 +34,7 @@ module.exports = {
     'import/first': 1,
     'import/no-duplicates': 1,
     'import/newline-after-import': 1,
+    'vue/require-render-return': 0,
     'no-multi-assign': 0,
     'no-param-reassign': 0,
     'no-shadow': 2,
@@ -49,6 +51,7 @@ module.exports = {
     'no-tabs': 1,
     'no-mixed-spaces-and-tabs': 1,
     'object-curly-spacing': 0,
+    'block-spacing': [1, 'always'],
     'key-spacing': [1, {
       beforeColon: false,
       afterColon: true,

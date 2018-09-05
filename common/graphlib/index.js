@@ -1,7 +1,7 @@
 import * as Serialization from '@/common/util/serialization';
 
-import Units from '@/common/units';
-
+// Avoid circular dependency between compiler and units
+import Units from '@/common/units'; // eslint-disable-line no-unused-vars
 import { GraphCompiler } from '@/common/graphlib/compiler';
 
 let node_types = new Map();
