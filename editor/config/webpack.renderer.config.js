@@ -19,6 +19,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin')
 let whiteListedModules = ['vue']
 
 let rendererConfig = {
+  mode: 'development',
   devtool: '#inline-source-map',
   entry: {
     renderer: path.join(__dirname, '../src/main.js')

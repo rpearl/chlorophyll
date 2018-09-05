@@ -7,6 +7,7 @@ const { dependencies } = require('../package.json')
 const webpack = require('webpack')
 
 let mainConfig = {
+  mode: 'development',
   entry: {
     main: path.join(__dirname, './main/index.js')
   },
