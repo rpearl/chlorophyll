@@ -7,6 +7,7 @@ const webpack = require('webpack')
 
 const CopyWebpackPlugin = require('copy-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
+const VueLoaderPlugin = require('vue-loader/lib/plugin')
 
 let webConfig = {
   devtool: '#inline-source-map',
@@ -73,13 +74,10 @@ let webConfig = {
     new HtmlWebpackPlugin({
       filename: 'index.html',
       template: path.resolve(__dirname, '../src/index.ejs'),
-      minify: {
-        collapseWhitespace: true,
-        removeAttributeQuotes: true,
-        removeComments: true
-      },
+      minify: false,
       nodeModules: false
     }),
+    new VueLoaderPlugin(),
     new webpack.DefinePlugin({
       'process.env.IS_WEB': 'true'
     }),

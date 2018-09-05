@@ -8,6 +8,7 @@ const webpack = require('webpack')
 
 const CopyWebpackPlugin = require('copy-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
+const VueLoaderPlugin = require('vue-loader/lib/plugin')
 
 /**
  * List of node_modules to include in webpack bundle
@@ -42,11 +43,16 @@ let rendererConfig = {
       },
       {
         test: /\.css$/,
-        use: ['style-loader', 'css-loader']
+        use: ['vue-style-loader', 'css-loader']
       },
       {
         test: /\.s[ac]ss$/,
-        loaders: ['style-loader', 'css-loader', 'resolve-url-loader', 'sass-loader']
+        loaders: [
+          'vue-style-loader',
+          'css-loader',
+          'resolve-url-loader',
+          'sass-loader'
+        ]
       },
       {
         test: /\.html$/,
@@ -70,8 +76,18 @@ let rendererConfig = {
             options: {
               extractCSS: process.env.NODE_ENV === 'production',
               loaders: {
-                sass: 'vue-style-loader!css-loader!resolve-url-loader!sass-loader?indentedSyntax=1',
-                scss: 'vue-style-loader!css-loader!resolve-url-loader!sass-loader'
+                sass: [
+                  'vue-style-loader',
+                  'css-loader',
+                  'resolve-url-loader',
+                  'sass-loader?indentedSyntax=1'
+                ],
+                scss: [
+                  'vue-style-loader',
+                  'css-loader',
+                  'resolve-url-loader',
+                  'sass-loader'
+                ]
               }
             },
           }
@@ -125,13 +141,10 @@ let rendererConfig = {
     new HtmlWebpackPlugin({
       filename: 'index.html',
       template: path.resolve(__dirname, '../src/index.ejs'),
-      minify: {
-        collapseWhitespace: true,
-        removeAttributeQuotes: true,
-        removeComments: true
-      },
+      minify: false,
       nodeModules: path.resolve(__dirname, '../node_modules')
     }),
+    new VueLoaderPlugin(),
     new webpack.HotModuleReplacementPlugin(),
     new webpack.NoEmitOnErrorsPlugin(),
     // Automatically inject 'var $ = require('jquery');' if $ is used

@@ -7,7 +7,10 @@ module.exports = {
     browser: true,
     node: true
   },
-  extends: 'google',
+  extends: [
+    'google',
+    'plugin:vue/essential'
+  ],
   globals: {
     __static: true
   },
