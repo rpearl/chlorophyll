@@ -1,6 +1,5 @@
 module.exports = {
   root: true,
-  parser: 'babel-eslint',
   parserOptions: {
     sourceType: 'module'
   },
@@ -16,10 +15,12 @@ module.exports = {
     'html',
     'import'
   ],
-  'import/extensions': [
-    '.js',
-    '.vue'
-  ],
+  settings: {
+    'import/extensions': [
+      '.js',
+      '.vue'
+    ],
+  },
   'rules': {
     'global-require': 0,
     'import/no-unresolved': 0,

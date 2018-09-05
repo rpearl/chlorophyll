@@ -28,10 +28,7 @@ let mainConfig = {
       },
       {
         test: /\.js$/,
-        use: [
-          'cache-loader',
-          'babel-loader',
-        ],
+        use: 'cache-loader',
         exclude: /node_modules/
       },
       {
