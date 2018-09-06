@@ -78,6 +78,7 @@
     "babel-plugin-transform-es2015-modules-commonjs": "^6.26.2",
     "babel-plugin-transform-runtime": "^6.23.0",
     "babel-preset-env": "^1.7.0",
+    "babel-preset-es2015": "^6.24.1",
     "babel-preset-stage-0": "^6.24.1",
     "cache-loader": "^1.2.2",
     "cfonts": "^2.1.3",
@@ -129,13 +130,14 @@
       "vue"
     ],
     "moduleNameMapper": {
-      "^@/(.+)": "<rootDir>/src/$1",
-      "^chl/(.+)": "<rootDir>/src/js/$1"
+      "^@/common/(.+)": "<rootDir>/common/$1",
+      "^@/(.+)": "<rootDir>/editor/src/$1",
+      "^chl/(.+)": "<rootDir>/editor/src/js/$1"
     },
     "moduleDirectories": [
-      "src",
-      "../common",
-      "node_modules"
+      "editor/src",
+      "common",
+      "editor/node_modules"
     ],
     "transform": {
       "^.+\\.vue$": "jest-vue-preprocessor",
