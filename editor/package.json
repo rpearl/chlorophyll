@@ -115,6 +115,7 @@
     "style-loader": "^0.23.0",
     "ts-jest": "^23.1.4",
     "ts-loader": "^5.0.0",
+    "typescript-eslint-parser": "^18.0.0",
     "uglifyjs-webpack-plugin": "^1.3.0",
     "url-loader": "^1.1.1",
     "vue-html-loader": "^1.2.4",
@@ -135,14 +136,17 @@
       "^chl/(.+)": "<rootDir>/editor/src/js/$1"
     },
     "moduleDirectories": [
-      "editor/src",
-      "common",
       "editor/node_modules"
+    ],
+    "transformIgnorePatterns": [
+      "/node_modules/",
+      "/\\.vert$/",
+      "/\\.frag$/"
     ],
     "transform": {
       "^.+\\.vue$": "jest-vue-preprocessor",
       "^.+\\.tsx?$": "ts-jest",
-      ".*": "babel-jest"
+      "^.+\\.jsx?$": "babel-jest"
     },
     "setupTestFrameworkScriptFile": "<rootDir>/config/jest-preamble.js"
   }
