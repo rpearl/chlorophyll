@@ -139,7 +139,9 @@
     "moduleNameMapper": {
       "^@/common/(.+)": "<rootDir>/../common/$1",
       "^@/(.+)": "<rootDir>/src/$1",
-      "^chl/(.+)": "<rootDir>/src/js/$1"
+      "^chl/(.+)": "<rootDir>/src/js/$1",
+      "^.+\\.vert$": "<rootDir>/../util/empty.js",
+      "^.+\\.frag$": "<rootDir>/../util/empty.js"
     },
     "modulePaths": [
       "<rootDir>/node_modules"
@@ -149,9 +151,7 @@
       "bower_components"
     ],
     "transformIgnorePatterns": [
-      "/node_modules/(?!osc)",
-      "\\.vert$",
-      "\\.frag$"
+      "/node_modules/(?!osc)"
     ],
     "transform": {
       "^.+\\.vue$": "jest-vue-preprocessor",
