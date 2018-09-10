@@ -56,7 +56,7 @@
     "jquery": "^3.2.1",
     "keyboardjs": "^2.3.4",
     "lodash": "^4.17.4",
-    "osc": "^2.2.0",
+    "osc": "^2.2.4",
     "tar-stream": "^1.5.4",
     "three": "^0.96.0",
     "three.js-fbo": "^1.5.0",
@@ -126,23 +126,32 @@
     "webpack-hot-middleware": "^2.18.0"
   },
   "jest": {
+    "roots": [
+      "<rootDir>",
+      "<rootDir>/../common",
+      "<rootDir>/.."
+    ],
     "moduleFileExtensions": [
       "js",
       "ts",
       "vue"
     ],
     "moduleNameMapper": {
-      "^@/common/(.+)": "<rootDir>/common/$1",
-      "^@/(.+)": "<rootDir>/editor/src/$1",
-      "^chl/(.+)": "<rootDir>/editor/src/js/$1"
+      "^@/common/(.+)": "<rootDir>/../common/$1",
+      "^@/(.+)": "<rootDir>/src/$1",
+      "^chl/(.+)": "<rootDir>/src/js/$1"
     },
+    "modulePaths": [
+      "<rootDir>/node_modules"
+    ],
     "moduleDirectories": [
-      "editor/node_modules"
+      "node_modules",
+      "bower_components"
     ],
     "transformIgnorePatterns": [
-      "/node_modules/",
-      "/\\.vert$/",
-      "/\\.frag$/"
+      "/node_modules/(?!osc)",
+      "\\.vert$",
+      "\\.frag$"
     ],
     "transform": {
       "^.+\\.vue$": "jest-vue-preprocessor",
