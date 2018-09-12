@@ -8,7 +8,8 @@ module.exports = {
   },
   env: {
     browser: true,
-    node: true
+    node: true,
+    'jest/globals': true
   },
   extends: [
     'eslint:recommended',
@@ -16,11 +17,13 @@ module.exports = {
     'plugin:vue/essential'
   ],
   globals: {
-    __static: true
+    __static: true,
+    __schemas: true
   },
   plugins: [
     'html',
-    'import'
+    'import',
+    'jest'
   ],
   settings: {
     'import/extensions': [
@@ -34,6 +37,7 @@ module.exports = {
     'no-control-regex': 0,
     'no-regex-spaces': 0,
     'no-extra-semi': 0,
+    'indent': 0,
 
     // modules & imports
     'global-require': 0,
