@@ -107,13 +107,10 @@ export class GraphBase {
         this.emit('global-output-added', { name, type });
     }
 
-    removeGlobalInput(name) {
-        this.global_outputs.delete(name);
-        this.emit('global-output-removed', { name });
-    }
     setGlobalOutputData(name, data) {
         this.global_outputs.get(name).data = data;
     }
+
     getGlobalOutputData(name) {
         return this.global_outputs.get(name).data;
     }
