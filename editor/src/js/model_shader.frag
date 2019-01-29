@@ -2,7 +2,7 @@
 #define OUTLINE_WIDTH 0.015
 #define OUTLINE_SIZE (CIRCLE_SIZE - OUTLINE_WIDTH)
 uniform sampler2D computedColors;
-varying float vOffset;
+varying vec2 vOffset;
 
 uniform bool displayOnly;
 varying vec3 vOverlayColor;
@@ -35,7 +35,7 @@ void main() {
     }
     outcolor = vOverlayColor;
   } else {
-    outcolor = texture2D(computedColors, vec2(vOffset, 0.5)).rgb;
+    outcolor = texture2D(computedColors, vOffset).rgb;
     outcolor *= vec3(1.25, 0.8, 0.95);
     outcolor = toGamma(outcolor, 3.5);
     outcolor.g *= 1.05;

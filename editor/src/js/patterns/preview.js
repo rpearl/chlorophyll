@@ -2,13 +2,16 @@ import Vue from 'vue';
 import { PatternRunner } from 'chl/patterns/runner';
 import { currentModel } from 'chl/model';
 
-import {pushPixels, pushBlackFrame} from 'chl/hardware/pixelpusher';
+import {/*pushPixels,*/ pushBlackFrame} from 'chl/hardware/pixelpusher';
 
 export const RunState = {
     Stopped: 0,
     Running: 1,
     Paused: 2,
 };
+
+function pushPixels() {
+}
 
 export const PatternPreview = Vue.component('pattern-preview', {
     props: ['pattern', 'mapping', 'group', 'runstate', 'pushToHardware'],
@@ -21,13 +24,17 @@ export const PatternPreview = Vue.component('pattern-preview', {
 
     computed: {
         step() {
+            const width = Math.ceil(Math.sqrt(currentModel.num_pixels));
             const pixelBuffers = [
-                new Float32Array(currentModel.num_pixels * 4),
-                new Float32Array(currentModel.num_pixels * 4),
+                new Float32Array(width * width * 4),
+                new Float32Array(width * width * 4),
             ];
             return (time) => {
                 const pixels = this.pushToHardware ? pixelBuffers[time % 2] : null;
                 const current = this.runner.step(time, pixels);
+                if (time % 60 === 0) {
+                    console.log(pixels);
+                }
                 currentModel.setFromTexture(current);
                 if (this.pushToHardware) {
                     pushPixels(currentModel, pixels);

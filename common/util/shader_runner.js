@@ -55,7 +55,7 @@ export class ShaderRunner {
         glTrace(gl, 'before createProgram');
         this.programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader]);
         glTrace(gl, 'before quadBuffer');
-        this.quadBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
+        this.quadBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl, 1, 0.5, 0.5);
         glTrace(gl, 'after quadBuffer');
 
         this.uniforms = uniforms;

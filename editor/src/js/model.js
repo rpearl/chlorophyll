@@ -239,10 +239,16 @@ export class Model extends ModelBase {
         });
 
         this.colors = new Float32Array(this.num_pixels * 3);
-        let offsets = new Float32Array(this.num_pixels);
+        let offsets = new Float32Array(this.num_pixels * 2);
+
+        const width = Math.ceil(Math.sqrt(this.num_pixels));
         for (let i = 0; i < this.num_pixels; i++) {
-            offsets[i] = i / this.num_pixels;
+            const row = Math.floor(i / width);
+            const col = i % width;
+            offsets[2*i] = row / width;
+            offsets[2*i+1] = col / width;
         }
+        console.log(width, this.num_pixels, offsets);
 
         for (let strip = 0; strip < this.num_strips; strip++) {
             let strip_geometry = new THREE.Geometry();
@@ -262,37 +268,34 @@ export class Model extends ModelBase {
         this.geometry = new THREE.BufferGeometry();
         this.geometry.addAttribute('position', new THREE.BufferAttribute(this.positions, 3));
         this.geometry.addAttribute('overlayColor', new THREE.BufferAttribute(this.colors, 3));
-        this.geometry.addAttribute('aOffset', new THREE.BufferAttribute(offsets, 1));
+        this.geometry.addAttribute('aOffset', new THREE.BufferAttribute(offsets, 2));
 
         this.updateColors();
 
         this.geometry.computeBoundingSphere();
         this.geometry.computeBoundingBox();
 
-        const boxSize = new THREE.Vector3();
-        this.geometry.boundingBox.getSize(boxSize);
-        const {x, y, z} = boxSize;
-        const max = Math.max(x, y, z);
+        //const factor = 750 / max;
 
-        const factor = 750 / max;
+        //let avg_dist = 0;
+        //for (let i = 0; i < this.num_pixels; i++) {
+        //    let pos = this.getPosition(i);
+        //    pos = pos.multiplyScalar(factor);
+        //    if (i > 0) {
+        //        avg_dist += pos.distanceTo(this.getPosition(i-1));
+        //    }
+        //    pos.toArray(this.positions, 3*i);
+        //}
+        //avg_dist /= this.num_pixels;
 
-        let avg_dist = 0;
-        for (let i = 0; i < this.num_pixels; i++) {
-            let pos = this.getPosition(i);
-            pos = pos.multiplyScalar(factor);
-            if (i > 0) {
-                avg_dist += pos.distanceTo(this.getPosition(i-1));
-            }
-            pos.toArray(this.positions, 3*i);
-        }
-        avg_dist /= this.num_pixels;
+        this.pixelsize = 5;
 
-        this.pixelsize = 0.25 * THREE.Math.clamp(avg_dist / 3, 35, 65);
+        //this.pixelsize = 0.25 * THREE.Math.clamp(avg_dist / 3, 35, 65);
 
         const texture = new THREE.DataTexture(
-            new Float32Array(3*this.num_pixels),
-            this.num_pixels,
-            1,
+            new Float32Array(3*width*width),
+            width,
+            width,
             THREE.RGBFormat,
             THREE.FloatType
         );
@@ -334,6 +337,33 @@ export class Model extends ModelBase {
             this.octree.addObjectData(this.particles, this.getPosition(i));
             this.octree.objectsData[i].index = i;
         }
+    }
+
+    zoomCameraToFit(camera) {
+        const boxSize = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        this.geometry.computeBoundingBox();
+        this.geometry.boundingBox.getSize(boxSize);
+        this.geometry.boundingBox.getCenter(center);
+        const {x, y, z} = boxSize;
+        const maxDim = Math.max(x, y, z);
+
+        const fov = camera.fov * ( Math.PI / 180 );
+
+        let cameraZ = Math.abs( maxDim / 2 / Math.tan( fov / 2 ) );
+
+        camera.position.z = 1.1*(center.z + cameraZ);
+
+        camera.lookAt(center);
+        camera.updateProjectionMatrix();
+
+    }
+
+    getCenter() {
+        const center = new THREE.Vector3();
+        this.geometry.boundingBox.getCenter(center);
+        return center;
+
     }
 
     // ui

@@ -1,5 +1,5 @@
-attribute float aOffset;
-varying float vOffset;
+attribute vec2 aOffset;
+varying vec2 vOffset;
 
 attribute vec3 overlayColor;
 varying vec3 vOverlayColor;
