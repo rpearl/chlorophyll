@@ -30,7 +30,7 @@ export const PatternPreview = Vue.component('pattern-preview', {
                 new Float32Array(width * width * 4),
             ];
             return (time) => {
-                const pixels = this.pushToHardware ? pixelBuffers[time % 2] : null;
+                const pixels = pixelBuffers[time % 2]; //this.pushToHardware ? pixelBuffers[time % 2] : null;
                 const current = this.runner.step(time, pixels);
                 if (time % 60 === 0) {
                     console.log(pixels);

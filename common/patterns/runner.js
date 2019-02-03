@@ -59,8 +59,11 @@ export default class RawPatternRunner {
         const {gl, width} = this;
 
         for (const [idx, pos] of positions) {
-            pos.toArray(this.mappedPositions, idx*4);
-            this.mappedPositions[idx*4+3] = 1; // group mask
+            const row = Math.floor(idx / width);
+            const col = idx % width;
+            const i = row * width + col;
+            pos.toArray(this.mappedPositions, i*4);
+            this.mappedPositions[i*4+3] = 1; // group mask
         }
         console.log(this.mappedPositions);
         glTrace(gl, 'before setTextureFromArray');

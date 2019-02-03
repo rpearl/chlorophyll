@@ -242,11 +242,13 @@ export class Model extends ModelBase {
         let offsets = new Float32Array(this.num_pixels * 2);
 
         const width = Math.ceil(Math.sqrt(this.num_pixels));
+        // if 3, then
+        // 1/6, (2/6), 3/6, (4/6), 5/6
         for (let i = 0; i < this.num_pixels; i++) {
             const row = Math.floor(i / width);
             const col = i % width;
-            offsets[2*i] = row / width;
-            offsets[2*i+1] = col / width;
+            offsets[2*i] = (2*row+1) / (2*width);
+            offsets[2*i+1] = (2*col+1) / (2*width);
         }
         console.log(width, this.num_pixels, offsets);
 

@@ -25,7 +25,7 @@ vec3 toLinear(vec3 v, float gamma) {
 
 void main() {
   vec3 outcolor;
-  vec2 uv =  vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1 ).xy;
+  vec2 uv =  gl_PointCoord.xy; //vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1 ).xy;
   float outline = circle(vec2(0.5)-uv, CIRCLE_SIZE);
   float circ = circle(vec2(0.5)-uv, OUTLINE_SIZE);
   vec3 outlineColor = vec3(0.);
