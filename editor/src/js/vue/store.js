@@ -64,8 +64,9 @@ export function newgid(context={}) {
 }
 
 export function crud(shortName, idMap, idList, defaultAttrs) {
+  const pluralName = `${shortName}s`;
   return {
-    [`clear_${shortName}`]: (state) => {
+    [`clear_${pluralName}`]: (state) => {
       state[idMap] = {};
       state[idList] = [];
     },
