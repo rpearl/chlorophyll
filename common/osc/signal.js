@@ -6,8 +6,8 @@
  */
 import _ from 'lodash';
 import * as assert from 'assert';
-import { input } from 'common/osc';
 import * as OT from './osc_types';
+import { input } from '../osc';
 
 export default class Signal {
     constructor(attrs) {

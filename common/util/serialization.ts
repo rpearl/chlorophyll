@@ -1,6 +1,6 @@
 import {cloneDeep} from 'lodash';
 import * as assert from 'assert';
-import * as T from 'common/types';
+import * as T from '../types';
 
 const tags = {};
 
