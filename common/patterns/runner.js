@@ -90,7 +90,7 @@ export default class RawPatternRunner {
     }
 
     get width() {
-        return Math.ceil(Math.sqrt(this.model.num_pixels));
+        return this.model.textureWidth;
     }
 
     _buildSharedTextures() {
