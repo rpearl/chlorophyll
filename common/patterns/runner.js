@@ -3,6 +3,7 @@ import { Compilation, GraphCompiler } from '@/common/graphlib/compiler';
 import _ from 'lodash';
 
 import * as glsl from '@/common/glsl';
+import {createFromConfig} from '@/common/mapping';
 import { glTrace } from '@/common/util/gl_debug';
 import { mappingHasView } from '@/common/mapping';
 import { ShaderRunner, getFloatingPointTextureOptions } from '@/common/util/shader_runner';
@@ -20,9 +21,10 @@ function extractFromTexture(target, ident, vec2, swizzle) {
 export default class RawPatternRunner {
     constructor(gl, model, pattern, group, mapping) {
         this.gl = gl;
+        const pixelMapping = createFromConfig(mapping);
         this.pattern = pattern;
         this.model = model;
-        this.mapping = mapping;
+        this.mapping = pixelMapping;
         this.group = group;
         this.graph = GraphLib.graphById(pattern.stages.pixel);
         this.cur_oscillators = [];
