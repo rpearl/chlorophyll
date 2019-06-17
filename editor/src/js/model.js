@@ -21,6 +21,7 @@ export function setCurrentModel(model) {
     store.commit('update_model', model !== null);
     store.commit('pixels/clear_active_selection');
     currentModel = model;
+    console.log(currentModel);
     colorDisplay.$emit('refresh_model');
 }
 
