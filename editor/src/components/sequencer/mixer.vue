@@ -64,8 +64,13 @@ export default {
     mounted() {
         const {renderer} = viewports.getViewport('main');
         this.mixer = new Mixer(currentModel, renderer.getContext());
+
+        this.mixer.addEventListener('on-clip-ended', this.endClip);
     },
     methods() {
+        endClip(endedClip) {
+            this.clipList = this.clipList.filter(clip=> clip.id !== endedClip.id);
+        },
         createClip(pattern_id) {
             const group = null;
             const availableMappings = this.mappingsByType[pattern.mapping_type] || [];
