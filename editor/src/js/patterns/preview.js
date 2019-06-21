@@ -3,10 +3,6 @@ import Const from 'chl/const';
 import { ArtnetRegistry } from '@/common/hardware/artnet';
 import { PatternRunner } from 'chl/patterns/runner';
 import { currentModel } from 'chl/model';
-import viewports from 'chl/viewport';
-import {bindFramebufferInfo} from 'twgl.js';
-import Compositor from '@/common/patterns/compositor';
-import * as THREE from 'three';
 
 import * as pixelpusher from 'chl/hardware/pixelpusher';
 
@@ -38,41 +34,15 @@ export const PatternPreview = Vue.component('pattern-preview', {
 
     computed: {
         step() {
-            const width = currentModel.textureWidth;
+            const width = Math.ceil(Math.sqrt(currentModel.num_pixels));
             const pixelBuffers = [
                 new Float32Array(width * width * 4),
                 new Float32Array(width * width * 4),
             ];
-
-            const { renderer } = viewports.getViewport('main');
-            const gl = renderer.getContext();
-
-            const compositor = new Compositor(gl, currentModel);
-            const {pattern, group, mapping} = this;
-            const clip = {
-                pattern,
-                group,
-                mapping,
-                duration: 60*60,
-                fadeInTime: 60*10,
-                fadeOutTime: 60*10,
-                opacity: 1,
-                blendMode: 1,
-            };
-            compositor.addClip(clip);
-
-            const threeTexture = new THREE.Texture();
-
             return (time) => {
                 const pixels = this.pushToHardware ? pixelBuffers[time % 2] : null;
-                const texture = compositor.step(pixels); //this.runner.step(time, pixels);
-                const properties = renderer.properties.get(threeTexture);
-                properties.__webglTexture = texture;
-                properties.__webglInit = true;
-                bindFramebufferInfo(gl, null);
-                renderer.state.reset();
-                currentModel.setFromTexture(threeTexture);
-
+                const current = this.runner.step(time, pixels);
+                currentModel.setFromTexture(current);
                 if (this.pushToHardware) {
                     switch (this.hardwareProtocol) {
                         case 'artnet':

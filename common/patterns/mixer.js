@@ -1,3 +1,4 @@
+import EventEmitter from 'events';
 import mixerFrag from '@/common/patterns/mixer.frag';
 import RawPatternRunner from '@/common/patterns/runner';
 import { ShaderRunner, getFloatingPointTextureOptions } from '@/common/util/shader_runner';
@@ -6,7 +7,7 @@ import * as twgl from 'twgl.js';
 import * as glslify from 'glslify';
 
 class ClipRunner {
-    constructor(compositor, clip) {
+    constructor(mixer, clip) {
         const {
             id,
             pattern,
@@ -19,19 +20,21 @@ class ClipRunner {
             blendMode,
         } = clip;
 
-        const {model, gl, mixer, uniforms} = compositor;
+        const {model, gl, uniforms} = mixer;
         this.id = id;
         this.gl = gl;
         this.time = 0;
         this.blendMode = blendMode;
-        this.duration = duration;
-        this.fadeInTime = fadeInTime;
-        this.fadeOutTime = fadeOutTime;
+        this.duration = duration * 60;
+        this.fadeInTime = fadeInTime * 60; // frames
+        this.fadeOutTime = fadeOutTime * 60;
         this.opacity = opacity;
 
-        this.totalTime = duration + fadeInTime + fadeOutTime;
+        this.totalTime = this.duration + this.fadeInTime + this.fadeOutTime;
+        debugger;
 
         this.mixer = mixer;
+
         this.uniforms = uniforms;
 
         this.runner = new RawPatternRunner(gl, model, pattern, group, mapping);
@@ -63,24 +66,25 @@ class ClipRunner {
         this.uniforms.texForeground = texture;
         this.uniforms.blendMode = this.blendMode;
         this.uniforms.opacity = this.getOpacity();
-        console.log(this.getOpacity());
+        this.mixer.layerRunner.step(pixels);
 
-        this.mixer.step(pixels);
-
-        return this.mixer.prevTexture();
+        return this.mixer.layerRunner.prevTexture();
     }
 
     detach() {
         this.runner.detach();
+        this.mixer.emit('clip-ended', this);
     }
 }
 
-export default class Compositor extends EventEmitter {
+export default class Mixer extends EventEmitter {
     constructor(gl, model) {
+        super();
         this.gl = gl;
         this.model = model;
 
         this.clips = [];
+        this.clipsById = new Map();
 
         const uniforms = {
             texForeground: null,
@@ -92,7 +96,7 @@ export default class Compositor extends EventEmitter {
         const width = this.model.textureWidth;
         const height = width;
 
-        this.mixer = new ShaderRunner({
+        this.layerRunner = new ShaderRunner({
             gl,
             width,
             height,
@@ -115,9 +119,19 @@ export default class Compositor extends EventEmitter {
     addClip(clip) {
         const runner = new ClipRunner(this, clip);
         this.clips.push(runner);
+        this.clipsById.set(clip.id, runner);
+    }
+
+    getTimesByClipId() {
+        const out = {};
+        for (const clip of this.clips) {
+            out[clip.id] = clip.time / 60; // seconds
+        }
+        return out;
     }
 
     updateClips(allClips) {
+        for (const clip of allClips) {
         const oldClipIds = new Set(this.clips.map(clip => clip.id));
         const newClipIds = new Set();
 
@@ -149,7 +163,7 @@ export default class Compositor extends EventEmitter {
         }
         const last = this.clips[this.clips.length-1];
         let output = last.step(background, pixels);
-        for (const clip of clips) {
+        for (const clip of this.clips) {
             if (clip.isDone()) {
                 clip.detach();
             }
