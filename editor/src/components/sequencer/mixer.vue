@@ -106,10 +106,10 @@ export default {
                 properties.__webglInit = true;
                 this.glReset();
                 currentModel.setFromTexture(this.outputTexture);
-                //const times = this.mixer.getTimesByClipId();
-                //for (const clip of this.currentClips) {
-                //    clip.time = times[clip.id];
-                //}
+                const times = this.mixer.getTimesByClipId();
+                for (const clip of this.currentClips) {
+                    clip.time = times[clip.id];
+                }
             }
         },
         runText() {
@@ -134,6 +134,7 @@ export default {
     },
     methods: {
         endClip(endedClip) {
+            console.log('clip ended', endedClip);
             this.currentClips = this.currentClips.filter(clip => clip.id !== endedClip.id);
         },
         createClip(pattern) {

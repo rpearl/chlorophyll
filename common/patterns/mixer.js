@@ -71,6 +71,11 @@ class ClipRunner {
         return this.mixer.layerRunner.prevTexture();
     }
 
+    fadeOut() {
+        const remaining = this.totalTime - this.time;
+        this.totalTime = this.time + Math.min(this.fadeOutTime, remaining);
+    }
+
     detach() {
         this.runner.detach();
         this.mixer.emit('clip-ended', this);
@@ -131,28 +136,26 @@ export default class Mixer extends EventEmitter {
     }
 
     updateClips(allClips) {
+        const clipsAfterUpdate = [];
+        const removedClipIds = new Set(this.clipsById.keys());
         for (const clip of allClips) {
-        const oldClipIds = new Set(this.clips.map(clip => clip.id));
-        const newClipIds = new Set();
-
-        const newClips = [];
-
-        for (const clip of allClips) {
-            // if in new, but not old
-            if (!oldClipIds.has(clip.id)) {
-                const runner = new ClipRunner(this, clip);
-                newClips.push(runner);
-                newClipIds.add(clip.id);
+            let runner;
+            if (!this.clipsById.has(clip.id)) {
+                runner = new ClipRunner(this, clip);
+                this.clipsById.set(clip.id, runner);
+            } else {
+                runner = this.clipsById.get(clip.id);
             }
+
+            clipsAfterUpdate.push(runner);
+            removedClipIds.delete(clip.id);
         }
 
-        for (const clip of this.clips) {
-            // in old, but not new
-            if (!newClipIds.has(clip.id)) {
-                clip.detach();
-            }
+        for (const clipId of removedClipIds) {
+            const clip = this.clipsById.get(clipId);
+            clip.fadeOut();
         }
-        this.clips = newClips;
+        this.clips = clipsAfterUpdate;
     }
 
     step(pixels=null) {
@@ -166,6 +169,7 @@ export default class Mixer extends EventEmitter {
         for (const clip of this.clips) {
             if (clip.isDone()) {
                 clip.detach();
+                this.clipsById.delete(clip.id);
             }
         }
         this.clips = this.clips.filter(clip => !clip.isDone());
