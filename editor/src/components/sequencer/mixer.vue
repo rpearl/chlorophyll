@@ -170,6 +170,9 @@ export default {
         },
         run() {
             this.step();
+            if (this.currentClips.length === 0) {
+                this.runState = RunState.Stopped;
+            }
             if (this.running) {
                 this.request_id = window.requestAnimationFrame(() => this.run());
             }
@@ -221,7 +224,6 @@ export default {
 }
 
 .clips {
-    border: 1px solid red;
     grid-area: clips;
     overflow: auto;
     height: auto;

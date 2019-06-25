@@ -31,7 +31,6 @@ class ClipRunner {
         this.opacity = opacity;
 
         this.totalTime = this.duration + this.fadeInTime + this.fadeOutTime;
-        debugger;
 
         this.mixer = mixer;
 
@@ -159,9 +158,12 @@ export default class Mixer extends EventEmitter {
     }
 
     step(pixels=null) {
+        if (this.clips.length === 0) {
+            return;
+        }
         let background = this.initialTexture;
         for (let i = 0; i < this.clips.length - 1; i++) {
-            const clip = this.clips[0];
+            const clip = this.clips[i];
             background = clip.step(background);
         }
         const last = this.clips[this.clips.length-1];
