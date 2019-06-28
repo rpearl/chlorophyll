@@ -55,6 +55,9 @@ export default class Mixer extends EventEmitter {
         const clip = {
             id,
             runner,
+            pattern,
+            group,
+            mapping,
             time: 0,
             opacity: 0,
             blendMode: 1,
@@ -110,7 +113,7 @@ export default class Mixer extends EventEmitter {
             return;
         }
         clip.playing = false;
-        const {pattern, group, mapping} = clip.runner;
+        const {pattern, group, mapping} = clip;
         const {gl, model} = this;
         clip.runner.detach();
         clip.runner = new RawPatternRunner(gl, model, pattern, group, mapping);

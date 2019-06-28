@@ -105,10 +105,7 @@ export default {
                 properties.__webglInit = true;
                 this.glReset();
                 currentModel.setFromTexture(this.outputTexture);
-                const times = this.mixer.getTimesByClipId();
-                for (const clip of this.currentClips) {
-                    clip.time = times[clip.id];
-                }
+                this.updateTimes();
             }
         },
 
@@ -163,6 +160,7 @@ export default {
         stopClip(clip) {
             clip.playing = false;
             this.mixer.stopClip(clip.id);
+            this.updateTimes();
         },
 
         pauseClip(clip) {
@@ -181,6 +179,12 @@ export default {
             const gl = renderer.getContext();
             bindFramebufferInfo(gl, null);
             renderer.state.reset();
+        },
+        updateTimes() {
+            const times = this.mixer.getTimesByClipId();
+            for (const clip of this.currentClips) {
+                clip.time = times[clip.id];
+            }
         },
     },
 };
