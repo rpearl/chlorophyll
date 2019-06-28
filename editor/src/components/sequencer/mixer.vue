@@ -3,7 +3,13 @@
     <div class="clips panel">
         <draggable class="draggable" v-model="currentClips" :options="currentClipOptions">
             <template v-for="(item, index) in currentClips">
-                <clip :key="item.id" :clip="item" :run-state="runState" />
+                <clip
+                    :key="item.id"
+                    :clip="item"
+                    @play-clip="playClip(item)"
+                    @pause-clip="pauseClip(item)"
+                    @stop-clip="stopClip(item)"
+                />
             </template>
         </draggable>
     </div>
@@ -21,12 +27,6 @@
               </draggable>
             </ul>
         </div>
-    </div>
-  <div class="topbar panel inline">
-    <div class="control-row">
-      <button class="square highlighted material-icons" @click="togglePlay">
-        {{ runText }}
-      </button>
     </div>
   </div>
 </div>
@@ -56,7 +56,6 @@ export default {
     mixins: [mappingUtilsMixin, patternUtilsMixin],
     data() {
         return {
-            runState: RunState.Stopped,
             mixer: null,
             currentClips: [],
         };
@@ -112,11 +111,13 @@ export default {
                 }
             }
         },
-        runText() {
-            return this.running ? 'pause' : 'play_arrow';
+
+        playingClips() {
+            return this.currentClips.filter(clip => clip.playing);
         },
+
         running() {
-            return this.runState === RunState.Running;
+            return this.playingClips.length > 0;
         },
     },
     watch: {
@@ -125,18 +126,20 @@ export default {
                 this.mixer.updateClips(this.currentClips);
             },
         },
+        running() {
+            if (this.running) {
+                console.log('running');
+                this.run();
+            }
+            currentModel.display_only = this.running;
+        },
     },
     mounted() {
         const {renderer} = viewports.getViewport('main');
         const gl = renderer.getContext();
         this.mixer = new Mixer(gl, currentModel);
-        this.mixer.on('clip-ended', this.endClip);
     },
     methods: {
-        endClip(endedClip) {
-            console.log('clip ended', endedClip);
-            this.currentClips = this.currentClips.filter(clip => clip.id !== endedClip.id);
-        },
         createClip(pattern) {
             const group = this.group_list[0];
             const availableMappings = this.mappingsByType[pattern.mapping_type] || [];
@@ -149,51 +152,29 @@ export default {
                 group,
                 mapping,
                 time: 0,
-                duration: 60,
-                fadeInTime: 10,
-                fadeOutTime: 10,
-                opacity: 1,
-                blendMode: 1,
+                playing: false,
             };
         },
-        togglePlay() {
-            if (this.running) {
-                this.pause();
-            } else {
-                this.play();
-            }
+        playClip(clip) {
+            clip.playing = true;
+            this.mixer.playClip(clip.id);
         },
-        play() {
-            this.runState = RunState.Running;
-            currentModel.display_only = true;
-            this.run();
+
+        stopClip(clip) {
+            clip.playing = false;
+            this.mixer.stopClip(clip.id);
         },
+
+        pauseClip(clip) {
+            clip.playing = false;
+            this.mixer.pauseClip(clip.id);
+        },
+
         run() {
             this.step();
-            if (this.currentClips.length === 0) {
-                this.runState = RunState.Stopped;
-            }
             if (this.running) {
                 this.request_id = window.requestAnimationFrame(() => this.run());
             }
-        },
-        pause() {
-            this.runState = RunState.Paused;
-            if (this.request_id !== null) {
-                window.cancelAnimationFrame(this.request_id);
-            }
-            this.request_id = null;
-        },
-        stop() {
-            if (this.runState === RunState.Stopped) {
-                return;
-            }
-            currentModel.display_only = false;
-            this.pause();
-            this.runState = RunState.Stopped;
-            window.requestAnimationFrame(() => {
-                this.glReset();
-            });
         },
         glReset() {
             const {renderer} = viewports.getViewport('main');

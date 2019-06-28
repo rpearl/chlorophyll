@@ -385,6 +385,7 @@ export class Model extends ModelBase {
         }
         boundingBox.getSize(boxSize);
         boundingBox.getCenter(center);
+        console.log(boundingBox);
         const {x, y, z} = boxSize;
         const maxDim = Math.max(x, y, z);
 

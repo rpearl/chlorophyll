@@ -6,81 +6,6 @@ import { ShaderRunner, getFloatingPointTextureOptions } from '@/common/util/shad
 import * as twgl from 'twgl.js';
 import * as glslify from 'glslify';
 
-class ClipRunner {
-    constructor(mixer, clip) {
-        const {
-            id,
-            pattern,
-            group,
-            mapping,
-            duration,
-            fadeInTime,
-            fadeOutTime,
-            opacity,
-            blendMode,
-        } = clip;
-
-        const {model, gl, uniforms} = mixer;
-        this.id = id;
-        this.gl = gl;
-        this.time = 0;
-        this.blendMode = blendMode;
-        this.duration = duration * 60;
-        this.fadeInTime = fadeInTime * 60; // frames
-        this.fadeOutTime = fadeOutTime * 60;
-        this.opacity = opacity;
-
-        this.totalTime = this.duration + this.fadeInTime + this.fadeOutTime;
-
-        this.mixer = mixer;
-
-        this.uniforms = uniforms;
-
-        this.runner = new RawPatternRunner(gl, model, pattern, group, mapping);
-    }
-
-    isDone() {
-        return this.time >= this.totalTime;
-    }
-
-    getOpacity() {
-        if (this.isDone()) {
-            return 0;
-        }
-        const remaining = this.totalTime - this.time;
-        let pct = this.opacity;
-        if (this.time < this.fadeInTime) {
-            pct *= (this.time / this.fadeInTime);
-        } else if (remaining < this.fadeOutTime) {
-            pct *= (remaining / this.fadeOutTime);
-        }
-
-        return pct;
-    }
-
-    step(background, pixels=null) {
-        const texture = this.runner.step(this.time);
-        this.time++;
-        this.uniforms.texBackground = background;
-        this.uniforms.texForeground = texture;
-        this.uniforms.blendMode = this.blendMode;
-        this.uniforms.opacity = this.getOpacity();
-        this.mixer.layerRunner.step(pixels);
-
-        return this.mixer.layerRunner.prevTexture();
-    }
-
-    fadeOut() {
-        const remaining = this.totalTime - this.time;
-        this.totalTime = this.time + Math.min(this.fadeOutTime, remaining);
-    }
-
-    detach() {
-        this.runner.detach();
-        this.mixer.emit('clip-ended', this);
-    }
-}
-
 export default class Mixer extends EventEmitter {
     constructor(gl, model) {
         super();
@@ -100,7 +25,7 @@ export default class Mixer extends EventEmitter {
         const width = this.model.textureWidth;
         const height = width;
 
-        this.layerRunner = new ShaderRunner({
+        this.layerBlender = new ShaderRunner({
             gl,
             width,
             height,
@@ -120,61 +45,106 @@ export default class Mixer extends EventEmitter {
         this.uniforms = uniforms;
     }
 
-    addClip(clip) {
-        const runner = new ClipRunner(this, clip);
-        this.clips.push(runner);
-        this.clipsById.set(clip.id, runner);
-    }
-
-    getTimesByClipId() {
-        const out = {};
-        for (const clip of this.clips) {
-            out[clip.id] = clip.time / 60; // seconds
+    getOrCreateClip({id, pattern, group, mapping}) {
+        if (this.clipsById.has(id)) {
+            const clip = this.clipsById.get(id);
+            return clip;
         }
-        return out;
+        const {gl, model} = this;
+        const runner = new RawPatternRunner(gl, model, pattern, group, mapping);
+        const clip = {
+            id,
+            runner,
+            time: 0,
+            opacity: 0,
+            blendMode: 1,
+            playing: false,
+        };
+        this.clipsById.set(id, clip);
+        return clip;
     }
 
-    updateClips(allClips) {
+    updateClips(clipInfos) {
         const clipsAfterUpdate = [];
         const removedClipIds = new Set(this.clipsById.keys());
-        for (const clip of allClips) {
-            let runner;
-            if (!this.clipsById.has(clip.id)) {
-                runner = new ClipRunner(this, clip);
-                this.clipsById.set(clip.id, runner);
-            } else {
-                runner = this.clipsById.get(clip.id);
-            }
-
-            clipsAfterUpdate.push(runner);
+        for (const clipInfo of clipInfos) {
+            const clip = this.getOrCreateClip(clipInfo);
+            clipsAfterUpdate.push(clip);
             removedClipIds.delete(clip.id);
         }
 
         for (const clipId of removedClipIds) {
             const clip = this.clipsById.get(clipId);
-            clip.fadeOut();
+            clip.runner.detach();
         }
         this.clips = clipsAfterUpdate;
     }
 
-    step(pixels=null) {
-        if (this.clips.length === 0) {
+    getTimesByClipId() {
+        const out = {};
+        for (const clip of this.clips) {
+            out[clip.id] = clip.time;
+        }
+        return out;
+    }
+
+    playClip(clipId) {
+        const clip = this.clipsById.get(clipId);
+        if (!clip) {
             return;
         }
-        let background = this.initialTexture;
-        for (let i = 0; i < this.clips.length - 1; i++) {
-            const clip = this.clips[i];
-            background = clip.step(background);
+        clip.playing = true;
+    }
+
+    pauseClip(clipId) {
+        const clip = this.clipsById.get(clipId);
+        if (!clip) {
+            return;
         }
-        const last = this.clips[this.clips.length-1];
-        let output = last.step(background, pixels);
+        clip.playing = false;
+    }
+
+    stopClip(clipId) {
+        const clip = this.clipsById.get(clipId);
+        if (!clip) {
+            return;
+        }
+        clip.playing = false;
+        const {pattern, group, mapping} = clip.runner;
+        const {gl, model} = this;
+        clip.runner.detach();
+        clip.runner = new RawPatternRunner(gl, model, pattern, group, mapping);
+        clip.time = 0;
+        clip.playing = false;
+    }
+
+    step(pixels=null) {
+        const activeLayers = [];
         for (const clip of this.clips) {
-            if (clip.isDone()) {
-                clip.detach();
-                this.clipsById.delete(clip.id);
+            if (!clip.playing) {
+                continue;
             }
+            const texture = clip.runner.step(clip.time);
+            clip.time++;
+            const {blendMode, opacity} = clip;
+            activeLayers.push({texture, blendMode, opacity});
         }
-        this.clips = this.clips.filter(clip => !clip.isDone());
-        return output;
+
+        if (activeLayers.length === 0) {
+            return;
+        }
+
+        let background = this.initialTexture;
+        for (let i = 0; i < activeLayers.length; i++) {
+            const {texture, blendMode, opacity} = activeLayers[i];
+            this.uniforms.texBackground = background;
+            this.uniforms.texForeground = texture;
+            this.uniforms.blendMode = blendMode;
+            this.uniforms.opacity = 1;
+            const usePixels = (i === activeLayers.length-1);
+            this.layerBlender.step(usePixels ? pixels : null);
+            background = this.layerBlender.prevTexture();
+        }
+        return background;
     }
 }
