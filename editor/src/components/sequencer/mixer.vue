@@ -1,45 +1,60 @@
 <template>
   <div class="grid-container">
+    <div class="topbar panel inline">
+        <div class="control-row">
+      <button class="square highlighted material-icons" @click="togglePlay">
+        {{ runText }}
+      </button>
+      <button @click="stop" class="square material-icons">stop</button>
+      {{ this.time }}
+        </div>
+    </div>
     <div class="clips panel" ref="clips">
-      <template v-for="(output, index) in currentOutputs">
+      <template v-for="(output, index) in outputs">
         <div class="output">
-            <div class="grouplist">
-                {{ output.groups[0].name }}
-            </div>
-            <template v-for="(layer, index) in output.layers">
-                <div class="layer"
-                     @dragover="patternDragged"
-                     @drop="patternDropped(output, index, $event)"
-                 >
-                    <template v-for="(item, index) in layer.clips">
-                      <clip
-                        :key="item.id"
-                        :clip="item"
-                        :scale="scale"
-                        @play-clip="playClip(item)"
-                        @pause-clip="pauseClip(item)"
-                        @stop-clip="stopClip(item)"
-                        />
-                    </template>
-                </div>
+          <div class="grouplist">
+            {{ output.groups[0].name }}
+          </div>
+          <div class="target">
+            <template v-for="layer in output.layers">
+              <div class="layer"
+                   @dragover="patternDragged"
+                   @drop="patternDropped(output, layerId, $event)"
+                   />
             </template>
+            <div v-if="output.pendingLayer"
+               class="layer"
+               @dragover="patternDragged"
+               @drop="patternDropped(output, layerId, $event)"
+            />
             <div class="layer ghost"
                  @dragover="patternDragged"
                  @drop="patternDroppedOnGhost(output, $event)"
-            />
+                 />
+            <template v-for="clip in output.clips">
+              <clip
+                :clip="clip"
+                :output="output"
+                :scale="scale"
+                :layerIndex="layerIndexesById[clip.layerId]"
+                @change-layer="newLayerIndex => changeClipLayer(output, clip, newLayerIndex)"
+                @end-drag="endDrag(output, clip)"
+                />
+            </template>
+          </div>
         </div>
       </template>
+        </div>
+        <div class="patterns panel">
+          <div class="flat-list">
+            <ul>
+              <li v-for="pattern in pattern_list" :key="pattern.id">
+                <div draggable="true" @dragstart="dragPattern(pattern, $event)">{{pattern.name}}</div>
+              </li>
+            </ul>
+          </div>
+        </div>
     </div>
-    <div class="patterns panel">
-      <div class="flat-list">
-        <ul>
-            <li v-for="pattern in pattern_list" :key="pattern.id">
-              <div draggable="true" @dragstart="dragPattern(pattern, $event)">{{pattern.name}}</div>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </div>
 </template>
 
 <script>
@@ -51,7 +66,7 @@ import draggable from 'vuedraggable';
 import viewports from 'chl/viewport';
 import store, {newgid} from 'chl/vue/store';
 
-import Mixer from '@/common/patterns/mixer';
+import Timeline from '@/common/patterns/timeline';
 import { currentModel } from 'chl/model';
 
 import Util from 'chl/util';
@@ -70,8 +85,10 @@ export default {
     data() {
         return {
             width: 0,
-            mixer: null,
-            currentOutputs: [],
+            timeline: null,
+            runstate: RunState.Stopped,
+            outputs: [],
+            time: 0,
         };
     },
     computed: {
@@ -88,44 +105,65 @@ export default {
             return new THREE.Texture();
         },
         scale() {
-            return d3.scaleLinear().domain([0, 60*60]).range([0, this.width]);
+            return d3.scaleLinear().domain([0, 5*60*60]).range([0, this.width]);
+        },
+        runText() {
+            return this.running ? 'pause' : 'play_arrow';
+        },
+        running() {
+            return this.runstate === RunState.Running;
+        },
+        stopped() {
+            return this.runstate === RunState.Stopped;
         },
         step() {
-            const mixer = this.mixer;
+            const timeline = this.timeline;
             const {renderer} = viewports.getViewport('main');
             return () => {
                 if (!this.running) {
                     return;
                 }
-                const texture = mixer.step();
+                this.time++;
+                const texture = timeline.step();
                 const properties = renderer.properties.get(this.outputTexture);
                 properties.__webglTexture = texture;
                 properties.__webglInit = true;
                 this.glReset();
                 currentModel.setFromTexture(this.outputTexture);
-                this.updateTimes();
             }
         },
 
         currentClips() {
-            const nestedClips = this.currentOutputs.map(output => {
-                return output.layers.map(layer => layer.clips);
-            });
-            return _.flattenDeep(nestedClips);
+            return _.flatten(this.outputs.map(output => output.clips.map(clip => {
+                const layerIndex = this.layerIndexesById[clip.layerId];
+                const layer = output.layers[layerIndex];
+                return {
+                    ...clip,
+                    layerIndex,
+                    blendingMode: layer.blendingMode,
+                    group: output.groups[0],
+                };
+            })));
         },
 
-        playingClips() {
-            return this.currentClips.filter(clip => clip.playing);
-        },
-
-        running() {
-            return this.playingClips.length > 0;
+        layerIndexesById() {
+            const layerIndexesById = {};
+            for (const output of this.outputs) {
+                for (let i = 0; i < output.layers.length; i++) {
+                    const layer = output.layers[i];
+                    layerIndexesById[layer.id] = i;
+                }
+                if (output.pendingLayer) {
+                    layerIndexesById[output.pendingLayer.id] = output.layers.length;
+                }
+            }
+            return layerIndexesById;
         },
     },
     watch: {
         currentClips: {
             handler(clipList) {
-                this.mixer.updateClips(this.currentClips);
+                this.timeline.updateClips(this.currentClips);
             },
         },
         running() {
@@ -142,7 +180,7 @@ export default {
 
         const {renderer} = viewports.getViewport('main');
         const gl = renderer.getContext();
-        this.mixer = new Mixer(gl, currentModel);
+        this.timeline = new Timeline(gl, currentModel);
 
         const initialOutputGroups = [this.group_list[0]];
         this.addOutput(initialOutputGroups)
@@ -152,12 +190,16 @@ export default {
     },
     methods: {
         addOutput(groups) {
-            this.currentOutputs.push({
+            const id = newgid();
+            this.outputs.push({
+                id,
                 groups,
                 layers: [],
+                clips: [],
+                pendingLayer: null,
             });
         },
-        createClip(pattern) {
+        createClip(pattern, layerId) {
             const group = this.group_list[0];
             const availableMappings = this.mappingsByType[pattern.mapping_type] || [];
             const mapping = availableMappings.length > 0 ? availableMappings[0] : null;
@@ -168,6 +210,7 @@ export default {
                 pattern,
                 group,
                 mapping,
+                layerId,
                 time: 0,
                 playing: false,
             };
@@ -200,48 +243,149 @@ export default {
             bindFramebufferInfo(gl, null);
             renderer.state.reset();
         },
-        updateTimes() {
-            const times = this.mixer.getTimesByClipId();
-            for (const clip of this.currentClips) {
-                clip.time = times[clip.id];
-            }
-        },
         dragPattern(pattern, event) {
-            console.log('dragPattern', pattern);
             event.dataTransfer.setData('text/plain', pattern.id);
             event.dataTransfer.dragEffect = 'link';
         },
         patternDragged(event) {
             event.preventDefault();
         },
-        _createClipFromDrop(event) {
+        coords(pageX, pageY) {
+            return Util.relativeCoords(this.$refs.clips, pageX, pageY);
+        },
+        _createClipFromDrop(event, layerId) {
             const patternId = event.dataTransfer.getData('text');
             const pattern = this.getPattern(patternId);
-            const clip = this.createClip(pattern);
+            const clip = this.createClip(pattern, layerId);
 
             const {pageX, pageY} = event;
-            const coords = Util.relativeCoords(this.$refs.clips, pageX, pageY);
+            const coords = this.coords(pageX, pageY);
             const startTime = Math.floor(this.scale.invert(coords.x));
             const endTime = startTime + 60*60;
             clip.startTime = startTime;
             clip.endTime = endTime;
             return clip;
         },
-        patternDropped(output, index, event) {
-            const clip = this._createClipFromDrop(event);
-            output.layers[index].clips.push(clip);
+        patternDropped(output, layerId, event) {
+            const clip = this._createClipFromDrop(event, layerId);
+            output.clips.push(clip);
+            this.resolveOverlaps(output, clip);
         },
+
+        addLayer(output, layerIndex, blendingMode, clips) {
+            const id = newgid();
+            const layer = {
+                id,
+                blendingMode,
+            };
+            for (const clip of clips) {
+                clip.layerId = id;
+            }
+            output.layers.splice(layerIndex, 0, layer);
+        },
+
+        addToPendingLayer(output, blendingMode, clip) {
+            if (!output.pendingLayer) {
+                output.pendingLayer = {
+                    id: newgid(),
+                    blendingMode,
+                };
+            }
+            clip.layerId = output.pendingLayer.id;
+        },
+
         patternDroppedOnGhost(output, event) {
             const clip = this._createClipFromDrop(event);
-            const layer = {
-                blendingMode: 1,
-                clips: [clip],
-            };
-            output.layers.push(layer);
+            output.clips.push(clip);
+            this.addLayer(output, output.layers.length, 1, [clip]);
         },
         resize() {
             this.width = this.$refs.clips.clientWidth;
         },
+
+        changeClipLayer(output, clip, newLayerIndex) {
+            const targetLayerIndex = _.clamp(newLayerIndex, 0, output.layers.length);
+            const layerIndex = this.layerIndexesById[clip.layerId];
+            if (targetLayerIndex === layerIndex) {
+                return;
+            }
+            const layer = output.layers[layerIndex];
+            if (targetLayerIndex === output.layers.length) {
+                this.addToPendingLayer(output, layer.blendingMode, clip);
+            } else {
+                const newLayer = output.layers[targetLayerIndex];
+                if (output.pendingLayer && clip.layerId === output.pendingLayer.id) {
+                    output.pendingLayer = null;
+                }
+                clip.layerId = newLayer.id;
+                this.resolveOverlaps(output, clip);
+            }
+        },
+
+        endDrag(output, clip) {
+            if (output.pendingLayer && clip.layerId === output.pendingLayer.id) {
+                output.layers.push(pendingLayer);
+            }
+            output.pendingLayer = null;
+            this.resolveOverlaps(output, clip);
+        },
+
+        resolveOverlaps(output, targetClip) {
+            const layerId = targetClip.layerId;
+            let overlap = false;
+
+            for (const clip of output.clips) {
+                if (clip.id === targetClip.id || clip.layerId !== layerId) {
+                    continue;
+                }
+                const first  = _.minBy([clip, targetClip], clip => clip.startTime);
+                const second = _.maxBy([clip, targetClip], clip => clip.startTime);
+                // if the clip starting first ends after the second one starts, overlap
+                if (first.endTime >= second.startTime) {
+                    overlap = true;
+                    break;
+                }
+            }
+
+            if (overlap) {
+                const layerIndex = this.layerIndexesById[targetClip.layerId];
+                this.addLayer(output, layerIndex+1, layer.blendingMode, [targetClip]);
+            }
+        },
+
+        togglePlay() {
+            if (this.runstate == RunState.Running) {
+                this.pause();
+            } else {
+                this.runstate = RunState.Running;
+                this.run();
+            }
+        },
+        start() {
+            currentModel.display_only = true;
+            this.run();
+        },
+        run() {
+            this.runstate = RunState.Running;
+            this.step();
+            if (this.running) {
+                this.request_id = window.requestAnimationFrame(this.run);
+            }
+        },
+        pause() {
+            if (this.request_id !== null) {
+                window.cancelAnimationFrame(this.request_id);
+            }
+            this.request_id = null;
+            this.runstate = RunState.Paused;
+        },
+        stop() {
+            this.pause();
+            this.runstate = RunState.Stopped;
+            currentModel.display_only = false;
+            this.timeline.stop();
+            this.glReset();
+        }
     },
 };
 </script>
@@ -274,12 +418,26 @@ export default {
     }
 }
 
+.target {
+  position: relative;
+}
+
 .layer {
-    min-height: 5em;
-    border: 1px solid red;
-    position: relative;
-    .ghost {
-        border: 1px solid green;
+    height: 32px;
+
+    border-left: 1px solid $control-border;
+    border-right: 1px solid $control-border;
+        border-bottom: 1px solid $control-border;
+
+    &:first-of-type {
+        border-top: 1px solid $control-border;
+        border-top-left-radius: $control-border-radius;
+        border-top-right-radius: $control-border-radius;
+    }
+
+    &:last-of-type {
+        border-bottom-left-radius: $control-border-radius;
+        border-bottom-right-radius: $control-border-radius;
     }
 }
 
