@@ -6,7 +6,7 @@
         {{ runText }}
       </button>
       <button @click="stop" class="square material-icons">stop</button>
-      {{ this.time }}
+      {{ this.timeFormatted }}
         </div>
     </div>
     <div class="clips panel" ref="clips">
@@ -19,13 +19,13 @@
             <template v-for="layer in output.layers">
               <div class="layer"
                    @dragover="patternDragged"
-                   @drop="patternDropped(output, layerId, $event)"
+                   @drop="patternDropped(output, layer.id, $event)"
                    />
             </template>
             <div v-if="output.pendingLayer"
                class="layer"
                @dragover="patternDragged"
-               @drop="patternDropped(output, layerId, $event)"
+               @drop="patternDropped(output, output.pendingLayer.id, $event)"
             />
             <div class="layer ghost"
                  @dragover="patternDragged"
@@ -65,6 +65,7 @@ import {bindFramebufferInfo} from 'twgl.js';
 import draggable from 'vuedraggable';
 import viewports from 'chl/viewport';
 import store, {newgid} from 'chl/vue/store';
+import * as numeral from 'numeral';
 
 import Timeline from '@/common/patterns/timeline';
 import { currentModel } from 'chl/model';
@@ -124,12 +125,15 @@ export default {
                     return;
                 }
                 this.time++;
-                const texture = timeline.step();
+                const {texture, done} = timeline.step();
                 const properties = renderer.properties.get(this.outputTexture);
                 properties.__webglTexture = texture;
                 properties.__webglInit = true;
                 this.glReset();
                 currentModel.setFromTexture(this.outputTexture);
+                if (done) {
+                    this.runstate = RunState.Stopped;
+                }
             }
         },
 
@@ -159,6 +163,17 @@ export default {
             }
             return layerIndexesById;
         },
+
+        timeFormatted() {
+            const totalSeconds = this.time / 60;
+            const seconds = totalSeconds % 60;
+            const minutes = Math.floor(totalSeconds / 60);
+            const minutesString = numeral(minutes).format('00');
+            const secondsString = numeral(seconds).format('00.0');
+
+            return `${minutesString}:${secondsString}`;
+        }
+
     },
     watch: {
         currentClips: {
@@ -166,12 +181,21 @@ export default {
                 this.timeline.updateClips(this.currentClips);
             },
         },
-        running() {
-            if (this.running) {
-                console.log('running');
-                this.run();
+        runstate(state) {
+            switch(state) {
+                case RunState.Running: {
+                    this.start();
+                    break;
+                }
+                case RunState.Paused: {
+                    this.pause();
+                    break;
+                }
+                case RunState.Stopped: {
+                    this.stop();
+                    break;
+                }
             }
-            currentModel.display_only = this.running;
         },
     },
     mounted() {
@@ -349,16 +373,16 @@ export default {
 
             if (overlap) {
                 const layerIndex = this.layerIndexesById[targetClip.layerId];
+                const layer = output.layers[layerIndex];
                 this.addLayer(output, layerIndex+1, layer.blendingMode, [targetClip]);
             }
         },
 
         togglePlay() {
             if (this.runstate == RunState.Running) {
-                this.pause();
+                this.runstate = RunState.Paused;
             } else {
                 this.runstate = RunState.Running;
-                this.run();
             }
         },
         start() {
@@ -366,7 +390,6 @@ export default {
             this.run();
         },
         run() {
-            this.runstate = RunState.Running;
             this.step();
             if (this.running) {
                 this.request_id = window.requestAnimationFrame(this.run);
@@ -377,11 +400,10 @@ export default {
                 window.cancelAnimationFrame(this.request_id);
             }
             this.request_id = null;
-            this.runstate = RunState.Paused;
         },
         stop() {
             this.pause();
-            this.runstate = RunState.Stopped;
+            this.time = 0;
             currentModel.display_only = false;
             this.timeline.stop();
             this.glReset();

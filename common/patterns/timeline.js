@@ -93,7 +93,6 @@ export default class Timeline {
             clip.runner.detach();
         }
         this.clips = _.sortBy(clipsAfterUpdate, clip => clip.layerIndex);
-        this.clipsByStartTime = _.groupBy(this.clips, clip => clip.startTime);
     }
 
     stop() {
@@ -109,17 +108,14 @@ export default class Timeline {
     }
 
     step(pixels=null) {
-        const startingClips = this.clipsByStartTime[this.time] || [];
-        for (const clip of startingClips) {
-            clip.playing = true;
-        }
-
         let activeLayers = [];
 
+        let done = true;
+
         for (const clip of this.clips) {
-            if (clip.endTime <= this.time) {
-                clip.playing = false;
-            }
+            clip.playing = clip.startTime <= this.time && clip.endTime >= this.time;
+
+            if (clip.endTime >= this.time) done = false;
             if (!clip.playing) {
                 continue;
             }
@@ -141,6 +137,6 @@ export default class Timeline {
             background = this.mixer.prevTexture();
         }
         this.time++;
-        return background;
+        return {texture: background, done};
     }
 }
