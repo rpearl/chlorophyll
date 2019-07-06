@@ -10,58 +10,87 @@
         </div>
     </div>
     <div class="clips panel" ref="clips">
-      <template v-for="(output, index) in outputs">
-        <div class="output">
-          <div class="grouplist">
-            {{ output.groups[0].name }}
-          </div>
-          <div class="target">
-            <template v-for="layer in output.layers">
-              <div class="layer"
-                   @dragover="patternDragged"
-                   @drop="patternDropped(output, layer.id, $event)"
-                   />
-            </template>
-            <div v-if="output.pendingLayer"
-               class="layer"
-               @dragover="patternDragged"
-               @drop="patternDropped(output, output.pendingLayer.id, $event)"
-            />
-            <div class="layer ghost"
-                 @dragover="patternDragged"
-                 @drop="patternDroppedOnGhost(output, $event)"
-                 />
-            <template v-for="clip in output.clips">
-              <clip
-                :clip="clip"
-                :output="output"
-                :scale="scale"
-                :layerIndex="layerIndexesById[clip.layerId]"
-                @change-layer="newLayerIndex => changeClipLayer(output, clip, newLayerIndex)"
-                @end-drag="endDrag(output, clip)"
+      <div class="timeline-container" :style="timelineContainerStyle">
+      <div class="output-list" :style="outputListStyle">
+          <template v-for="{output, height, offset} in outputLayout">
+              <div class="output" :style="outputStyle({height, offset})"><div class="name" :style="{height: `${Const.timeline_track_height}px`}"><div>{{ output.groups[0].name }}</div></div></div>
+          </template>
+      </div>
+      <div class="canvas-container" :style="canvasContainerStyle">
+        <div :style="canvasStyle" ref="canvas">
+        <svg class="canvas" :width="canvasWidth" :height="totalHeight">
+        <g transform="translate(0, -0.5)">
+        <template v-for="[pos, {opacity, classed}] in visibleTicks">
+          <line :x1="pos" :x2="pos"
+                :y1="-4"   :y2="totalHeight"
+                :style="{opacity}"
+                :class="[classed, 'tick']"
                 />
+        </template>
+        <template v-for="{offset, output, height} in outputLayout">
+            <g :transform="`translate(0, ${offset})`">
+            <g>
+            <template v-for="(layer, index) in output.layers">
+                <rect x="0"
+                      :y="index*Const.timeline_track_height"
+                      :width="canvasWidth"
+                      :height="Const.timeline_track_height"
+                      class="layer"
+                      @dragover="patternDragged"
+                      @drop="patternDropped(output, layer.id, $event)"
+                  />
             </template>
-          </div>
+              <template v-for="clip in output.clips">
+                <clip
+                  :clip="clip"
+                  :output="output"
+                  :scale="scale"
+                  :snap="snap"
+                  :layerIndex="layerIndexesById[clip.layerId]"
+                  @change-layer="newLayerIndex => changeClipLayer(output, clip, newLayerIndex)"
+                  @end-drag="endDrag(output, clip)"
+                  />
+              </template>
+            </g>
+            <rect x="0"
+                  :y="height-32"
+                  :width="canvasWidth"
+                  height="32"
+                  class="layer"
+                  @dragover="patternDragged"
+                  @drop="patternDroppedOnGhost(output, $event)"
+            />
+            </g>
+        </template>
+        </g>
+      </svg>
         </div>
-      </template>
-        </div>
-        <div class="patterns panel">
-          <div class="flat-list">
-            <ul>
-              <li v-for="pattern in pattern_list" :key="pattern.id">
-                <div draggable="true" @dragstart="dragPattern(pattern, $event)">{{pattern.name}}</div>
-              </li>
-            </ul>
-          </div>
-        </div>
+      </div>
+      </div>
     </div>
+    <div class="patterns panel">
+      <div class="flat-list">
+        <ul>
+          <li v-for="pattern in pattern_list" :key="pattern.id">
+            <div draggable="true" @dragstart="dragPattern(pattern, $event)">{{pattern.name}}</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
+/*
+
+      <!--
+      -->
+      */
 import * as d3 from 'd3';
 import _ from 'lodash';
 import * as THREE from 'three';
 import {bindFramebufferInfo} from 'twgl.js';
+import Const, { ConstMixin } from 'chl/const';
 import draggable from 'vuedraggable';
 import viewports from 'chl/viewport';
 import store, {newgid} from 'chl/vue/store';
@@ -78,17 +107,39 @@ import {RunState} from 'chl/patterns/preview';
 
 import Clip from '@/components/sequencer/clip';
 
+const DISPLAY_THRESHOLD = 10;
+function frame(interval) {
+    return {interval, classed: 'tick-frame'};
+}
+function seconds(inp) {
+    const interval = inp*60;
+    return {interval, classed: 'tick-seconds'};
+}
+function minutes(inp) {
+    const interval = inp*60*60;
+    return {interval, classed: 'tick-minutes'};
+}
+const tickIntervals = [
+  ...[1, 15, 30].map(frame),
+  ...[1, 5, 10, 15, 30].map(seconds),
+  ...[1, 5].map(minutes),
+].reverse();
+
+const MAX_SCENE_LENGTH = 60*60*60;
+
 export default {
     name: 'mixer',
     store,
     components: { draggable, Clip },
-    mixins: [mappingUtilsMixin, patternUtilsMixin],
+    mixins: [mappingUtilsMixin, patternUtilsMixin, ConstMixin],
     data() {
         return {
             width: 0,
+            height: 0,
             timeline: null,
             runstate: RunState.Stopped,
             outputs: [],
+            domain: [0, 5*60*60],
             time: 0,
         };
     },
@@ -106,7 +157,10 @@ export default {
             return new THREE.Texture();
         },
         scale() {
-            return d3.scaleLinear().domain([0, 5*60*60]).range([0, this.width]);
+            return d3.scaleLinear().domain(this.domain).range([0, this.width]);
+        },
+        canvasWidth() {
+            return this.scale(MAX_SCENE_LENGTH);
         },
         runText() {
             return this.running ? 'pause' : 'play_arrow';
@@ -136,7 +190,43 @@ export default {
                 }
             }
         },
-
+        outputLayout() {
+            let sum = 0;
+            let outputs = [];
+            for (const output of this.outputs) {
+                const offset = sum;
+                const height = this.outputHeight(output);
+                sum += height;
+                outputs.push({output, offset, height});
+            }
+            return outputs;
+        },
+        totalHeight() {
+            const outputHeight = _.sumBy(this.outputLayout, layout => layout.height);
+            return Math.max(this.height, outputHeight);
+        },
+        timelineContainerStyle() {
+            return {
+                height: `${this.height}px`,
+            };
+        },
+        outputListStyle() {
+            return {
+                width: '200px',
+            };
+        },
+        canvasContainerStyle() {
+            return {
+                width: `${this.width - 200}px`,
+                height: `${this.totalHeight}px`,
+            };
+        },
+        canvasStyle() {
+            return {
+                width: `${this.canvasWidth}px`,
+                height: `${this.totalHeight}px`,
+            };
+        },
         currentClips() {
             return _.flatten(this.outputs.map(output => output.clips.map(clip => {
                 const layerIndex = this.layerIndexesById[clip.layerId];
@@ -172,8 +262,49 @@ export default {
             const secondsString = numeral(seconds).format('00.0');
 
             return `${minutesString}:${secondsString}`;
-        }
+        },
 
+        visibleIntervals() {
+            return tickIntervals.filter(({interval}) => {
+                const diff = this.scale(interval);
+                return diff >= DISPLAY_THRESHOLD;
+            }).map(tick => ({...tick, step: Math.log2(tick.interval)}));
+        },
+
+        visibleTicks() {
+            if (this.canvasWidth == 0) {
+                return [];
+            }
+            const start = 0;
+            const end = MAX_SCENE_LENGTH;
+            const out = new Map();
+
+            const visibleIntervals = this.visibleIntervals;
+
+            const stepMin = _.last(visibleIntervals).step;
+            const stepMax = _.first(visibleIntervals).step;
+            for (let { interval, classed, step} of visibleIntervals) {
+                let opacity = d3.easeQuadIn(Util.map(step, stepMin, stepMax, 0.15, 1));
+                opacity = _.clamp(opacity, 0.15, 1);
+                const istart = Math.ceil(start / interval) * interval;
+                const iend = Math.floor(end / interval) * interval;
+                if (opacity < 0.5) {
+                    classed += ' tick-dotted';
+                }
+                let curTicks = d3.range(istart, iend+interval, interval).map(this.scale);
+                for (let tick of curTicks) {
+                    if (out.get(tick) === undefined) {
+                        out.set(tick, { opacity, classed });
+                    }
+                }
+            }
+            out.delete(0);
+            return [...out.entries()];
+        },
+
+        snap() {
+            return _.last(this.visibleIntervals).interval;
+        },
     },
     watch: {
         currentClips: {
@@ -207,7 +338,8 @@ export default {
         this.timeline = new Timeline(gl, currentModel);
 
         const initialOutputGroups = [this.group_list[0]];
-        this.addOutput(initialOutputGroups)
+        this.addOutput(initialOutputGroups);
+        this.addOutput([this.group_list[1]]);
     },
     beforeDestroy() {
         window.removeEventListener('resize', this.resize);
@@ -221,6 +353,7 @@ export default {
                 layers: [],
                 clips: [],
                 pendingLayer: null,
+                dragPatternOffset: null,
             });
         },
         createClip(pattern, layerId) {
@@ -270,12 +403,13 @@ export default {
         dragPattern(pattern, event) {
             event.dataTransfer.setData('text/plain', pattern.id);
             event.dataTransfer.dragEffect = 'link';
+            this.dragPatternOffset = event.offsetX;
         },
         patternDragged(event) {
             event.preventDefault();
         },
         coords(pageX, pageY) {
-            return Util.relativeCoords(this.$refs.clips, pageX, pageY);
+            return Util.relativeCoords(this.$refs.canvas, pageX, pageY);
         },
         _createClipFromDrop(event, layerId) {
             const patternId = event.dataTransfer.getData('text');
@@ -284,10 +418,11 @@ export default {
 
             const {pageX, pageY} = event;
             const coords = this.coords(pageX, pageY);
-            const startTime = Math.floor(this.scale.invert(coords.x));
+            const startTime = Util.roundToInterval(this.scale.invert(coords.x-this.dragPatternOffset), this.snap);
             const endTime = startTime + 60*60;
             clip.startTime = startTime;
             clip.endTime = endTime;
+            this.dragPatternOffset = 0;
             return clip;
         },
         patternDropped(output, layerId, event) {
@@ -325,6 +460,7 @@ export default {
         },
         resize() {
             this.width = this.$refs.clips.clientWidth;
+            this.height = this.$refs.clips.clientHeight;
         },
 
         changeClipLayer(output, clip, newLayerIndex) {
@@ -346,12 +482,24 @@ export default {
             }
         },
 
+        outputHeight(output) {
+            const numLanes = 1 + output.layers.length + (output.pendingLayer ? 1 : 0);
+            return numLanes * Const.timeline_track_height;
+        },
+        outputStyle({offset, height}) {
+            return {
+                top: `${offset}px`,
+                height: `${height}px`,
+            };
+        },
         endDrag(output, clip) {
             if (output.pendingLayer && clip.layerId === output.pendingLayer.id) {
                 output.layers.push(pendingLayer);
             }
             output.pendingLayer = null;
             this.resolveOverlaps(output, clip);
+            const layersUsed = new Set(output.clips.map(clip => clip.layerId));
+            output.layers = output.layers.filter(layer => layersUsed.has(layer.id));
         },
 
         resolveOverlaps(output, targetClip) {
@@ -365,7 +513,7 @@ export default {
                 const first  = _.minBy([clip, targetClip], clip => clip.startTime);
                 const second = _.maxBy([clip, targetClip], clip => clip.startTime);
                 // if the clip starting first ends after the second one starts, overlap
-                if (first.endTime >= second.startTime) {
+                if (first.endTime > second.startTime) {
                     overlap = true;
                     break;
                 }
@@ -419,24 +567,18 @@ export default {
     grid-template-columns: 1fr 220px;
     grid-template-rows: 26px 1fr;
     grid-template-areas: "topbar patterns" "clips patterns";
-    position: absolute;
     height: 100%;
     width: 100%;
-    overflow: hidden;
 }
 
 .output {
-    display: flex;
-    flex-direction: column;
-    min-height: 5em;
-
-    .grouplist {
-        flex: 0 0;
-    }
-    .draggable {
-        flex-grow: 1;
+    border-bottom: 1px solid $panel-dark;
+    position: absolute;
+    width: 100%;
+    .name {
+        width: 100%;
         display: flex;
-        flex-direction: column;
+        align-items: center;
     }
 }
 
@@ -444,29 +586,29 @@ export default {
   position: relative;
 }
 
-.layer {
-    height: 32px;
-
-    border-left: 1px solid $control-border;
-    border-right: 1px solid $control-border;
-        border-bottom: 1px solid $control-border;
-
-    &:first-of-type {
-        border-top: 1px solid $control-border;
-        border-top-left-radius: $control-border-radius;
-        border-top-right-radius: $control-border-radius;
-    }
-
-    &:last-of-type {
-        border-bottom-left-radius: $control-border-radius;
-        border-bottom-right-radius: $control-border-radius;
-    }
-}
-
 .clips {
     grid-area: clips;
-    overflow: auto;
+    position: relative;
     height: auto;
+    display: flex;
+    width: 100%;
+    overflow: hidden;
+}
+
+.canvas-container {
+    overflow-x: scroll;
+    overflow-y: hidden;
+    height: 100%;
+}
+
+.timeline-container {
+    display: flex;
+    overflow-y: scroll;
+}
+
+.output-list {
+    position: relative;
+    border-right: 1px solid $panel-dark;
 }
 
 .patterns {
@@ -487,6 +629,35 @@ export default {
         display: flex;
         align-items: center;
     }
+}
 
+.canvas {
+    position: relative;
+    display: block;
+    text {
+        fill: $panel-text;
+    }
+
+    .output {
+        fill: $panel-bg;
+    }
+
+    .layer {
+        stroke-width: 1;
+        stroke: $panel-dark;
+        fill: none;
+    }
+}
+
+.tick {
+    stroke: white;
+}
+.tick-dotted {
+    stroke-dasharray: 8,24;
+}
+.tick-minutes {
+    &.tick-dotted {
+        stroke-dasharray: 2,1;
+    }
 }
 </style>

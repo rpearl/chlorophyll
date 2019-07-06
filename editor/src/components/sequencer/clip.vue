@@ -1,14 +1,47 @@
 <template>
-    <div class="clip" :style="style">
-        <div class="handle" @mousedown.stop="beginDrag(DragType.Start, $event)"/>
-        <div class="pattern" @mousedown.stop="beginDrag(DragType.Move, $event)">
-            {{clip.pattern.name}}
+    <g :transform="transform">
+        <rect
+            x="0"
+            y="0"
+            :width="width"
+            :height="height"
+            ry="4"
+            class="clip"
+            />
+        <foreignObject x="10" :y="0" :width="width-20" :height="height">
+        <div class="pattern-name">
+            <div>
+                {{ clip.pattern.name }}
+            </div>
         </div>
-        <div class="handle" @mousedown.stop="beginDrag(DragType.End, $event)" />
-    </div>
+        </foreignObject>
+
+        <rect
+            x="0"
+            y="0"
+            width="10"
+            :height="height"
+            class="drag-handle"
+            @mousedown.stop="beginDrag(DragType.Start, $event)"/>
+        <rect
+            x="10"
+            y="0"
+            :width="width-20"
+            :height="height"
+            class="pattern"
+            @mousedown.stop="beginDrag(DragType.Move, $event)" />
+        <rect
+            :x="width-10"
+            y="0"
+            width="10"
+            :height="height"
+            class="drag-handle"
+            @mousedown.stop="beginDrag(DragType.End, $event)"/>
+    </g>
 </template>
 <script>
 import _ from 'lodash';
+import Util from 'chl/util';
 import Const, { ConstMixin } from 'chl/const';
 import store from 'chl/vue/store';
 import { mappingUtilsMixin } from 'chl/mapping';
@@ -24,7 +57,7 @@ export default {
     name: 'clip',
     store,
     mixins: [ConstMixin, mappingUtilsMixin],
-    props: ['output', 'clip', 'layerIndex', 'scale'],
+    props: ['output', 'clip', 'layerIndex', 'scale', 'snap'],
     data() {
         return {
             dragInfo: null,
@@ -68,15 +101,19 @@ export default {
                 this.updateItem({mapping: mappingId});
             },
         },
-        style() {
-            const start = this.scale(this.clip.startTime);
-            const end = this.scale(this.clip.endTime);
-            const top = 32*this.layerIndex;
-            return {
-                left: `${start}px`,
-                width: `${end-start}px`,
-                top: `${top}px`,
-            };
+        transform() {
+            const x = this.scale(this.clip.startTime);
+            const y = 32*this.layerIndex + Const.timeline_track_padding;
+            return `translate(${x}, ${y})`;
+        },
+        maxTextWidth() {
+            return this.width - 40;
+        },
+        width() {
+            return this.scale(this.clip.endTime) - this.scale(this.clip.startTime);
+        },
+        height() {
+            return Const.timeline_track_height - 2*Const.timeline_track_padding;
         },
     },
     beforeDestroy() {
@@ -123,7 +160,7 @@ export default {
             }
 
             if (type === DragType.Move) {
-                const dLayer = Math.round(dY / 32);
+                const dLayer = Math.round(dY / Const.timeline_track_height);
                 const layerIndex = this.dragInfo.initialLayerIndex + dLayer;
                 this.$emit('change-layer', layerIndex);
             }
@@ -132,8 +169,8 @@ export default {
 
         endDrag(event) {
             this.dragInfo = null;
-            this.clip.startTime = Math.round(this.clip.startTime);
-            this.clip.endTime = Math.round(this.clip.endTime);
+            this.clip.startTime = Util.roundToInterval(this.clip.startTime, this.snap);
+            this.clip.endTime = Util.roundToInterval(this.clip.endTime, this.snap);
             this.$emit('end-drag');
             window.removeEventListener('mousemove', this.drag);
             window.removeEventListener('mouseup', this.endDrag);
@@ -144,35 +181,35 @@ export default {
 <style scoped lang="scss">
 @import './src/style/aesthetic.scss';
 
-.clip {
-    position: absolute;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background-color: $base-blue-2;
-    border: 1px solid $base-blue-1;
-    border-radius: $control-border-radius;
-    color: $accent-text;
-}
-
-.handle {
-    width: 10px;
+.drag-handle {
     cursor: col-resize;
-    align-self: stretch;
+    fill: none;
 }
 
 
 .pattern {
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
-    flex-grow: 1;
     cursor: move;
+    fill: none;
+}
+
+.clip {
+    fill: $control-highlight;
+    stroke: $control-highlight-border;
 }
 
 .mapping {
     margin-right: 2em;
+}
+
+.pattern-name {
+    display: flex;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    align-items: center;
+    color: $accent-text;
+
+    height: 100%;
 }
 
 </style>
