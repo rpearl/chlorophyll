@@ -42,7 +42,7 @@
         <tab-set slot="second" class="dock">
             <tab title="Pattern Editor"><pattern-editor /></tab>
             <tab title="Playlist"><playlist-editor /></tab>
-            <tab title="Mixer"><mixer /></tab>
+            <tab title="Timeline"><timeline /></tab>
         </tab-set>
     </split-pane>
     </div>
@@ -70,7 +70,7 @@ import GroupBrowser from '@/components/group/group_browser';
 import MappingBrowser from '@/components/mapping/mapping_browser';
 import PatternEditor from '@/components/patterns/editor';
 import PlaylistEditor from '@/components/sequencer/playlist_editor';
-import Mixer from '@/components/sequencer/mixer';
+import Timeline from '@/components/sequencer/timeline';
 import Viewport from '@/components/viewport';
 
 export default {
@@ -78,7 +78,7 @@ export default {
     mixins: [ConstMixin, HotkeyMixin],
     components: {
         PlaylistEditor,
-        Mixer,
+        Timeline,
         Camera,
         HardwareConfig,
         GroupBrowser,
