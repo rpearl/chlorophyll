@@ -45,7 +45,7 @@ export default class Timeline {
         this.uniforms = uniforms;
     }
 
-    getOrCreateClip({id, pattern, blendingMode, groups, mapping, startTime, endTime}) {
+    getOrCreateClip({id, pattern, blendingMode, opacity, groups, mapping, startTime, endTime}) {
         if (this.clipsById.has(id)) {
             const clip = this.clipsById.get(id);
             const {runner} = clip;
@@ -57,7 +57,6 @@ export default class Timeline {
                 clip.mapping = mapping;
                 runner.updatePixels(groups, mapping);
             }
-            clip.blendingMode = blendingMode;
             return clip;
         }
         const {gl, model} = this;
@@ -72,7 +71,7 @@ export default class Timeline {
             startTime,
             endTime,
             time: 0,
-            opacity: 0,
+            opacity,
             playing: false,
         };
         this.clipsById.set(id, clip);
@@ -84,9 +83,13 @@ export default class Timeline {
         const removedClipIds = new Set(this.clipsById.keys());
         for (const clipInfo of clipInfos) {
             const clip = this.getOrCreateClip(clipInfo);
+            clip.blendingMode = clipInfo.blendingMode;
             clip.layerIndex = clipInfo.layerIndex;
             clip.startTime = clipInfo.startTime;
             clip.endTime = clipInfo.endTime;
+            clip.fadeInTime = clipInfo.fadeInTime;
+            clip.fadeOutTime = clipInfo.fadeOutTime;
+            clip.opacity = clipInfo.opacity;
 
             if (this.time >= clip.startTime && this.time <= clip.endTime) {
                 clip.playing = true;
@@ -128,8 +131,16 @@ export default class Timeline {
                 continue;
             }
             const texture = clip.runner.step(clip.time);
+            const {blendingMode} = clip;
+            const timeRemaining = clip.endTime - clip.time;
+
+            let opacity = clip.opacity;
+            if (clip.time < clip.fadeInTime) {
+                opacity *= clip.time / clip.fadeInTime;
+            } else if (timeRemaining < clip.fadeOutTime) {
+                opacity *= timeRemaining / clip.fadeOutTime;
+            }
             clip.time++;
-            const {blendingMode, opacity} = clip;
             activeLayers.push({texture, blendingMode, opacity});
         }
 
@@ -139,7 +150,7 @@ export default class Timeline {
             this.uniforms.texBackground = background;
             this.uniforms.texForeground = texture;
             this.uniforms.blendMode = blendingMode;
-            this.uniforms.opacity = 1;
+            this.uniforms.opacity = opacity;
             const usePixels = (i === activeLayers.length-1);
             this.mixer.step(usePixels ? pixels : null);
             background = this.mixer.prevTexture();

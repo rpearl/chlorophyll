@@ -40,6 +40,7 @@
                    :class="sidebarLayerClass(layer)"
                    :style="sidebarItemStyle(index*Const.timeline_track_height)">
                 <div class="label" :style="{height: `${Const.timeline_track_height}px`}">
+                    <numeric-input :dragscale="200" style="width: 4em" :value="layer.opacity * 100" :min="0" :max="100" :precision="0" @input="val => setOpacity(layer, val)" />
                     <div class="material-icons clickable" @click.stop="openMenu($event, layer)">filter</div>
                 </div>
               </div>
@@ -79,6 +80,11 @@
                     @end-drag="endDrag(clip)" />
                 </template>
               </g>
+              <line v-if="time > 0"
+                    :x1="linePos" y1="0"
+                    :x2="linePos" :y2="totalHeight"
+                    class="time" />
+
             </svg>
           </div>
         </div>
@@ -123,6 +129,7 @@ import { mapGetters } from 'vuex';
 import {RunState} from 'chl/patterns/preview';
 
 import Clip from '@/components/sequencer/clip';
+import NumericInput from '@/components/widgets/numeric_input';
 
 
 const DISPLAY_THRESHOLD = 10;
@@ -148,7 +155,7 @@ const MAX_SCENE_LENGTH = 60*60*60;
 export default {
     name: 'timeline',
     store,
-    components: { Clip, VueContext },
+    components: { Clip, VueContext, NumericInput },
     mixins: [mappingUtilsMixin, patternUtilsMixin, ConstMixin],
     data() {
         return {
@@ -182,6 +189,9 @@ export default {
         },
         scale() {
             return d3.scaleLinear().domain(this.domain).range([0, this.width]);
+        },
+        linePos() {
+            return this.scale(this.time);
         },
         canvasWidth() {
             return this.scale(MAX_SCENE_LENGTH);
@@ -235,8 +245,11 @@ export default {
                     const layer = this.layersById[clip.layerId];
                     out.push({
                         ...clip,
+                        fadeInTime: 10*60,
+                        fadeOutTime: 10*60,
                         groups: output.groups,
                         blendingMode: layer.blendingMode,
+                        opacity: layer.opacity,
                     });
                 }
             }
@@ -457,6 +470,7 @@ export default {
             const layer = {
                 id,
                 blendingMode,
+                opacity: 1,
                 outputId: output.id,
             };
             for (const clip of clips) {
@@ -596,6 +610,9 @@ export default {
                 this.$refs.menu.$el.scrollTop = 0;
             });
         },
+        setOpacity(layer, val) {
+            layer.opacity = val / 100;
+        },
     },
 };
 </script>
@@ -610,8 +627,6 @@ export default {
     height: 100%;
     width: 100%;
 }
-
-.item 
 
 .target {
   position: relative;
@@ -684,7 +699,7 @@ export default {
 
     .layers {
         position: relative;
-        width: 2em;
+        width: 6em;
     }
 
     .outputs {
@@ -744,6 +759,11 @@ export default {
         stroke-width: 1;
         stroke: darken($panel-bg, 5%);
     }
+}
+
+.time {
+    stroke: darken($base-blue-1, 10%);
+    stroke-width: 1;
 }
 
 .tick {
