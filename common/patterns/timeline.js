@@ -42,29 +42,37 @@ export default class Timeline {
         };
 
         this.initalTexture = twgl.createTexture(gl, textureOptions);
-        this.clipsByStartTime = {};
-
         this.uniforms = uniforms;
     }
 
-    getOrCreateClip({id, pattern, group, mapping, startTime, endTime}) {
+    getOrCreateClip({id, pattern, blendingMode, groups, mapping, startTime, endTime}) {
         if (this.clipsById.has(id)) {
             const clip = this.clipsById.get(id);
+            const {runner} = clip;
+            const groupSet = new Set(groups.map(group => group.id));
+            const curGroupSet = new Set(clip.groups.map(group => group.id));
+
+            if (clip.mapping.id !== mapping.id || !_.isEqual(groupSet, curGroupSet)) {
+                clip.groups = groups;
+                clip.mapping = mapping;
+                runner.updatePixels(groups, mapping);
+            }
+            clip.blendingMode = blendingMode;
             return clip;
         }
         const {gl, model} = this;
-        const runner = new RawPatternRunner(gl, model, pattern, group, mapping);
+        const runner = new RawPatternRunner(gl, model, pattern, groups, mapping);
         const clip = {
             id,
             runner,
             pattern,
-            group,
+            groups,
             mapping,
+            blendingMode,
             startTime,
             endTime,
             time: 0,
             opacity: 0,
-            blendMode: 1,
             playing: false,
         };
         this.clipsById.set(id, clip);
@@ -97,10 +105,10 @@ export default class Timeline {
 
     stop() {
         for (const clip of this.clips) {
-            const {pattern, group, mapping} = clip;
+            const {pattern, groups, mapping} = clip;
             const {gl, model} = this;
             clip.runner.detach();
-            clip.runner = new RawPatternRunner(gl, model, pattern, group, mapping);
+            clip.runner = new RawPatternRunner(gl, model, pattern, groups, mapping);
             clip.time = 0;
             clip.playing = false;
         }
@@ -121,16 +129,16 @@ export default class Timeline {
             }
             const texture = clip.runner.step(clip.time);
             clip.time++;
-            const {blendMode, opacity} = clip;
-            activeLayers.push({texture, blendMode, opacity});
+            const {blendingMode, opacity} = clip;
+            activeLayers.push({texture, blendingMode, opacity});
         }
 
         let background = this.initialTexture;
         for (let i = 0; i < activeLayers.length; i++) {
-            const {texture, blendMode, opacity} = activeLayers[i];
+            const {texture, blendingMode, opacity} = activeLayers[i];
             this.uniforms.texBackground = background;
             this.uniforms.texForeground = texture;
-            this.uniforms.blendMode = blendMode;
+            this.uniforms.blendMode = blendingMode;
             this.uniforms.opacity = 1;
             const usePixels = (i === activeLayers.length-1);
             this.mixer.step(usePixels ? pixels : null);

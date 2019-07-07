@@ -19,13 +19,13 @@ function extractFromTexture(target, ident, vec2, swizzle) {
 }
 
 export default class RawPatternRunner {
-    constructor(gl, model, pattern, group, mapping) {
+    constructor(gl, model, pattern, groups, mapping) {
         this.gl = gl;
         const pixelMapping = createFromConfig(mapping);
         this.pattern = pattern;
         this.model = model;
         this.mapping = pixelMapping;
-        this.group = group;
+        this.groups = _.isArray(groups) ? groups : [groups];
         this.graph = GraphLib.graphById(pattern.stages.pixel);
         this.cur_oscillators = [];
 
@@ -41,6 +41,12 @@ export default class RawPatternRunner {
         this.refresh();
     }
 
+    updatePixels(groups, mapping) {
+        this.groups = groups;
+        this.mapping = createFromConfig(mapping);
+        this.updatePositions();
+    }
+
     detach() {
         if (this.phaseUpdateStage) {
             this.phaseUpdateStage.detach();
@@ -53,7 +59,8 @@ export default class RawPatternRunner {
     }
 
     mapPositions() {
-        const pixels = this.model.getGroupPixels(this.group.id);
+        const pixelIndexes = _.flatten(this.groups.map(group => group.pixels));
+        const pixels = pixelIndexes.map(idx => ({idx, pos: this.model.getPosition(idx)}));
         const mappedPoints = this.mapping.mapPixels(pixels, this.pattern.coord_type);
 
         return mappedPoints;

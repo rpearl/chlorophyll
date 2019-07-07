@@ -69,6 +69,7 @@
     "typescript": "^3.0.3",
     "url-pattern": "^1.0.3",
     "vue": "^2.5.13",
+    "vue-context": "^4.0.2",
     "vue-electron": "^1.0.6",
     "vue-scroll-sync": "^1.0.5",
     "vue-text-mask": "^6.1.2",

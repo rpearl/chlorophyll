@@ -57,7 +57,7 @@ export default {
     name: 'clip',
     store,
     mixins: [ConstMixin, mappingUtilsMixin],
-    props: ['output', 'clip', 'layerIndex', 'scale', 'snap'],
+    props: ['clip', 'layerIndex', 'scale', 'snap'],
     data() {
         return {
             dragInfo: null,
@@ -119,16 +119,6 @@ export default {
     beforeDestroy() {
     },
     methods: {
-        togglePlay() {
-            if (!this.clip.playing) {
-                this.$emit('play-clip');
-            } else {
-                this.$emit('pause-clip');
-            }
-        },
-        stop() {
-            this.$emit('stop-clip');
-        },
         beginDrag(type, event) {
             const {x, y} = this.$parent.coords(event.pageX, event.pageY);
             this.dragInfo = {

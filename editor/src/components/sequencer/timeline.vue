@@ -5,67 +5,83 @@
       <button class="square highlighted material-icons" @click="togglePlay">
         {{ runText }}
       </button>
-      <button @click="stop" class="square material-icons">stop</button>
+      <button @click="onStop" class="square material-icons">stop</button>
       {{ this.timeFormatted }}
         </div>
     </div>
     <div class="clips panel" ref="clips">
       <div class="timeline-container" :style="timelineContainerStyle">
-      <div class="output-list" :style="outputListStyle">
-          <template v-for="{output, height, offset} in outputLayout">
-              <div class="output" :style="outputStyle({height, offset})"><div class="name" :style="{height: `${Const.timeline_track_height}px`}"><div>{{ output.groups[0].name }}</div></div></div>
+        <vue-context ref="menu">
+          <template slot-scope="child" v-if="child.data">
+            <li
+              v-for="mode in blendingModes"
+              :class="{control: true, selected: child.data.blendingMode === mode.value}"
+              @click.prevent="setMode(child.data, mode.value)">
+              <div>{{ mode.description }}</div><span class="material-icons">check</span>
+            </li>
           </template>
-      </div>
-      <div class="canvas-container" :style="canvasContainerStyle">
-        <div :style="canvasStyle" ref="canvas">
-        <svg class="canvas" :width="canvasWidth" :height="totalHeight">
-        <g transform="translate(0, -0.5)">
-        <template v-for="[pos, {opacity, classed}] in visibleTicks">
-          <line :x1="pos" :x2="pos"
-                :y1="-4"   :y2="totalHeight"
-                :style="{opacity}"
-                :class="[classed, 'tick']"
-                />
-        </template>
-        <template v-for="{offset, output, height} in outputLayout">
-            <g :transform="`translate(0, ${offset})`">
-            <g>
-            <template v-for="(layer, index) in output.layers">
-                <rect x="0"
-                      :y="index*Const.timeline_track_height"
-                      :width="canvasWidth"
-                      :height="Const.timeline_track_height"
-                      class="layer"
-                      @dragover="patternDragged"
-                      @drop="patternDropped(output, layer.id, $event)"
-                  />
+        </vue-context>
+        <div class="sidebar" :style="sidebarStyle">
+          <div class="outputs">
+            <template v-for="(layer, index) in layers">
+              <div class="item" :class="sidebarLayerClass(layer)" :style="sidebarItemStyle(index*Const.timeline_track_height)" />
             </template>
-              <template v-for="clip in output.clips">
-                <clip
-                  :clip="clip"
-                  :output="output"
-                  :scale="scale"
-                  :snap="snap"
-                  :layerIndex="layerIndexesById[clip.layerId]"
-                  @change-layer="newLayerIndex => changeClipLayer(output, clip, newLayerIndex)"
-                  @end-drag="endDrag(output, clip)"
-                  />
-              </template>
-            </g>
-            <rect x="0"
-                  :y="height-32"
-                  :width="canvasWidth"
-                  height="32"
-                  class="layer"
-                  @dragover="patternDragged"
-                  @drop="patternDroppedOnGhost(output, $event)"
-            />
-            </g>
-        </template>
-        </g>
-      </svg>
+            <template v-for="{output, offset} in outputLayout">
+              <div class="output item" :class="sidebarOutputClass(output)" :style="sidebarItemStyle(offset)">
+                <div class="label" :style="{height: `${Const.timeline_track_height}px`}">
+                  <div>{{ output.groups[0].name }}</div>
+                </div>
+              </div>
+            </template>
+          </div>
+          <div class="layers">
+            <template v-for="(layer, index) in layers">
+              <div class="item"
+                   :class="sidebarLayerClass(layer)"
+                   :style="sidebarItemStyle(index*Const.timeline_track_height)">
+                <div class="label" :style="{height: `${Const.timeline_track_height}px`}">
+                    <div class="material-icons clickable" @click.stop="openMenu($event, layer)">filter</div>
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
-      </div>
+        <div class="canvas-container" :style="canvasContainerStyle">
+          <div :style="canvasStyle" ref="canvas">
+            <svg class="canvas" :width="canvasWidth" :height="totalHeight">
+              <g transform="translate(0, -0.5)">
+                <template v-for="[pos, {opacity, classed}] in visibleTicks">
+                  <line :x1="pos" :x2="pos"
+                        :y1="-4"   :y2="totalHeight"
+                        :style="{opacity}"
+                        :class="[classed, 'tick']"
+                        />
+                </template>
+                <template v-for="(layer, index) in layers">
+                  <rect :x="0"
+                        :y="index*Const.timeline_track_height"
+                        :width="canvasWidth"
+                        :height="Const.timeline_track_height"
+                        class="layer"
+                        @dragover="patternDragged"
+                        @drop="patternDropped(layer.id, $event)" />
+                  <line x1="0" :y1="(index+1)*Const.timeline_track_height"
+                        :x2="canvasWidth" :y2="(index+1)*Const.timeline_track_height"
+                        class="layer-line" />
+                </template>
+                <template v-for="clip in clips">
+                  <clip
+                    :clip="clip"
+                    :scale="scale"
+                    :snap="snap"
+                    :layerIndex="layerIndexesById[clip.layerId]"
+                    @change-layer="newLayerIndex => changeClipLayer(clip, newLayerIndex)"
+                    @end-drag="endDrag(clip)" />
+                </template>
+              </g>
+            </svg>
+          </div>
+        </div>
       </div>
     </div>
     <div class="patterns panel">
@@ -86,12 +102,13 @@
       <!--
       -->
       */
+import { VueContext } from 'vue-context';
 import * as d3 from 'd3';
 import _ from 'lodash';
 import * as THREE from 'three';
 import {bindFramebufferInfo} from 'twgl.js';
 import Const, { ConstMixin } from 'chl/const';
-import draggable from 'vuedraggable';
+import modes from '@/common/util/blending_modes';
 import viewports from 'chl/viewport';
 import store, {newgid} from 'chl/vue/store';
 import * as numeral from 'numeral';
@@ -106,6 +123,7 @@ import { mapGetters } from 'vuex';
 import {RunState} from 'chl/patterns/preview';
 
 import Clip from '@/components/sequencer/clip';
+
 
 const DISPLAY_THRESHOLD = 10;
 function frame(interval) {
@@ -128,9 +146,9 @@ const tickIntervals = [
 const MAX_SCENE_LENGTH = 60*60*60;
 
 export default {
-    name: 'mixer',
+    name: 'timeline',
     store,
-    components: { draggable, Clip },
+    components: { Clip, VueContext },
     mixins: [mappingUtilsMixin, patternUtilsMixin, ConstMixin],
     data() {
         return {
@@ -138,7 +156,10 @@ export default {
             height: 0,
             timeline: null,
             runstate: RunState.Stopped,
-            outputs: [],
+            outputOrder: [],
+            outputsById: {},
+            layersById: {},
+            clipsById: {},
             domain: [0, 5*60*60],
             time: 0,
         };
@@ -155,6 +176,9 @@ export default {
         ]),
         outputTexture() {
             return new THREE.Texture();
+        },
+        blendingModes() {
+            return modes;
         },
         scale() {
             return d3.scaleLinear().domain(this.domain).range([0, this.width]);
@@ -190,6 +214,44 @@ export default {
                 }
             }
         },
+        outputs() {
+            return this.outputOrder.map(outputId => this.outputsById[outputId]);
+        },
+        layers() {
+            return _.flatten(this.outputs.map(output => this.outputLayers(output)));
+        },
+        clipsByLayerId() {
+            const clips = _.values(this.clipsById);
+            return _.groupBy(clips, clip => clip.layerId);
+        },
+        clips() {
+            return _.values(this.clipsById);
+        },
+        runnableClips() {
+            const out = [];
+            for (const output of this.outputs) {
+                const clips = this.outputClips(output);
+                for (const clip of clips) {
+                    const layer = this.layersById[clip.layerId];
+                    out.push({
+                        ...clip,
+                        groups: output.groups,
+                        blendingMode: layer.blendingMode,
+                    });
+                }
+            }
+            return out;
+
+        },
+        layerIndexesById() {
+            const out = {};
+            let i = 0;
+            for (const layer of this.layers) {
+                out[layer.id] = i;
+                i++;
+            }
+            return out;
+        },
         outputLayout() {
             let sum = 0;
             let outputs = [];
@@ -210,7 +272,7 @@ export default {
                 height: `${this.height}px`,
             };
         },
-        outputListStyle() {
+        sidebarStyle() {
             return {
                 width: '200px',
             };
@@ -228,32 +290,8 @@ export default {
             };
         },
         currentClips() {
-            return _.flatten(this.outputs.map(output => output.clips.map(clip => {
-                const layerIndex = this.layerIndexesById[clip.layerId];
-                const layer = output.layers[layerIndex];
-                return {
-                    ...clip,
-                    layerIndex,
-                    blendingMode: layer.blendingMode,
-                    group: output.groups[0],
-                };
-            })));
+            return [];
         },
-
-        layerIndexesById() {
-            const layerIndexesById = {};
-            for (const output of this.outputs) {
-                for (let i = 0; i < output.layers.length; i++) {
-                    const layer = output.layers[i];
-                    layerIndexesById[layer.id] = i;
-                }
-                if (output.pendingLayer) {
-                    layerIndexesById[output.pendingLayer.id] = output.layers.length;
-                }
-            }
-            return layerIndexesById;
-        },
-
         timeFormatted() {
             const totalSeconds = this.time / 60;
             const seconds = totalSeconds % 60;
@@ -293,23 +331,21 @@ export default {
                 }
                 let curTicks = d3.range(istart, iend+interval, interval).map(this.scale);
                 for (let tick of curTicks) {
-                    if (out.get(tick) === undefined) {
+                    if (out.get(tick) === undefined && tick !== 0) {
                         out.set(tick, { opacity, classed });
                     }
                 }
             }
-            out.delete(0);
             return [...out.entries()];
         },
-
         snap() {
             return _.last(this.visibleIntervals).interval;
         },
     },
     watch: {
-        currentClips: {
+        runnableClips: {
             handler(clipList) {
-                this.timeline.updateClips(this.currentClips);
+                this.timeline.updateClips(clipList);
             },
         },
         runstate(state) {
@@ -347,17 +383,17 @@ export default {
     methods: {
         addOutput(groups) {
             const id = newgid();
-            this.outputs.push({
+            const output = {
                 id,
                 groups,
-                layers: [],
-                clips: [],
-                pendingLayer: null,
+                layerIds: [],
                 dragPatternOffset: null,
-            });
+            };
+            this.$set(this.outputsById, id, output);
+            this.outputOrder.push(id);
+            this.addLayer(output, 0, 1, []);
         },
         createClip(pattern, layerId) {
-            const group = this.group_list[0];
             const availableMappings = this.mappingsByType[pattern.mapping_type] || [];
             const mapping = availableMappings.length > 0 ? availableMappings[0] : null;
             const id = newgid();
@@ -365,29 +401,12 @@ export default {
             return {
                 id,
                 pattern,
-                group,
                 mapping,
                 layerId,
                 time: 0,
                 playing: false,
             };
         },
-        playClip(clip) {
-            clip.playing = true;
-            this.mixer.playClip(clip.id);
-        },
-
-        stopClip(clip) {
-            clip.playing = false;
-            this.mixer.stopClip(clip.id);
-            this.updateTimes();
-        },
-
-        pauseClip(clip) {
-            clip.playing = false;
-            this.mixer.pauseClip(clip.id);
-        },
-
         run() {
             this.step();
             if (this.running) {
@@ -411,7 +430,7 @@ export default {
         coords(pageX, pageY) {
             return Util.relativeCoords(this.$refs.canvas, pageX, pageY);
         },
-        _createClipFromDrop(event, layerId) {
+        patternDropped(layerId, event) {
             const patternId = event.dataTransfer.getData('text');
             const pattern = this.getPattern(patternId);
             const clip = this.createClip(pattern, layerId);
@@ -423,91 +442,99 @@ export default {
             clip.startTime = startTime;
             clip.endTime = endTime;
             this.dragPatternOffset = 0;
-            return clip;
+            this.$set(this.clipsById, clip.id, clip);
+            this.resolveOverlaps(clip);
+            this.resolveGaps();
         },
-        patternDropped(output, layerId, event) {
-            const clip = this._createClipFromDrop(event, layerId);
-            output.clips.push(clip);
-            this.resolveOverlaps(output, clip);
+        outputLayers(output) {
+            return output.layerIds.map(layerId => this.layersById[layerId]);
         },
-
+        outputClips(output) {
+            return _.flatten(output.layerIds.map(layerId => this.clipsByLayerId[layerId] || []));
+        },
         addLayer(output, layerIndex, blendingMode, clips) {
             const id = newgid();
             const layer = {
                 id,
                 blendingMode,
+                outputId: output.id,
             };
             for (const clip of clips) {
                 clip.layerId = id;
             }
-            output.layers.splice(layerIndex, 0, layer);
+            this.$set(this.layersById, id, layer);
+            output.layerIds.splice(layerIndex, 0, id);
         },
-
-        addToPendingLayer(output, blendingMode, clip) {
-            if (!output.pendingLayer) {
-                output.pendingLayer = {
-                    id: newgid(),
-                    blendingMode,
-                };
-            }
-            clip.layerId = output.pendingLayer.id;
-        },
-
-        patternDroppedOnGhost(output, event) {
-            const clip = this._createClipFromDrop(event);
-            output.clips.push(clip);
-            this.addLayer(output, output.layers.length, 1, [clip]);
+        getOutputForClip(clip) {
+            const layer = this.layersById[clip.layerId];
+            const output = this.outputsById[layer.outputId];
+            return output;
         },
         resize() {
             this.width = this.$refs.clips.clientWidth;
             this.height = this.$refs.clips.clientHeight;
         },
-
-        changeClipLayer(output, clip, newLayerIndex) {
-            const targetLayerIndex = _.clamp(newLayerIndex, 0, output.layers.length);
-            const layerIndex = this.layerIndexesById[clip.layerId];
-            if (targetLayerIndex === layerIndex) {
+        changeClipLayer(clip, newLayerIndex) {
+            const newLayerId = this.layers[newLayerIndex].id;
+            if (clip.layerId === newLayerId) {
                 return;
             }
-            const layer = output.layers[layerIndex];
-            if (targetLayerIndex === output.layers.length) {
-                this.addToPendingLayer(output, layer.blendingMode, clip);
-            } else {
-                const newLayer = output.layers[targetLayerIndex];
-                if (output.pendingLayer && clip.layerId === output.pendingLayer.id) {
-                    output.pendingLayer = null;
-                }
-                clip.layerId = newLayer.id;
-                this.resolveOverlaps(output, clip);
-            }
-        },
 
+            clip.layerId = newLayerId;
+            this.resolveOverlaps(clip);
+        },
         outputHeight(output) {
-            const numLanes = 1 + output.layers.length + (output.pendingLayer ? 1 : 0);
+            const numLanes = output.layerIds.length;
             return numLanes * Const.timeline_track_height;
         },
-        outputStyle({offset, height}) {
+        sidebarItemStyle(offset) {
             return {
                 top: `${offset}px`,
-                height: `${height}px`,
+                height: `${Const.timeline_track_height}px`,
             };
         },
-        endDrag(output, clip) {
-            if (output.pendingLayer && clip.layerId === output.pendingLayer.id) {
-                output.layers.push(pendingLayer);
-            }
-            output.pendingLayer = null;
-            this.resolveOverlaps(output, clip);
-            const layersUsed = new Set(output.clips.map(clip => clip.layerId));
-            output.layers = output.layers.filter(layer => layersUsed.has(layer.id));
+        sidebarOutputClass(output) {
+            return output.layerIds.length === 1 ? 'last' : '';
         },
+        sidebarLayerClass(layer) {
+            const output = this.outputsById[layer.outputId];
+            if (_.last(output.layerIds) === layer.id) {
+                return 'last';
+            } else {
+                return '';
+            }
+        },
+        isLayerEmpty(layerId) {
+            const layerClips = this.clipsByLayerId[layerId] || [];
+            return layerClips.length === 0;
+        },
+        resolveGaps() {
+            for (const output of this.outputs) {
+                const lastId = _.last(output.layerIds);
+                const lastIsEmpty = this.isLayerEmpty(lastId);
 
-        resolveOverlaps(output, targetClip) {
+                const [empty, nonEmpty] = _.partition(output.layerIds, layerId => this.isLayerEmpty(layerId) && layerId !== lastId);
+
+                for (const layerId of empty) {
+                    this.$delete(this.layersById, layerId);
+                }
+                output.layerIds = nonEmpty;
+                if (!lastIsEmpty) {
+                    this.addLayer(output, output.layerIds.length, 1, []);
+                }
+            }
+        },
+        endDrag(clip) {
+            this.resolveOverlaps(clip);
+            this.resolveGaps();
+        },
+        resolveOverlaps(targetClip) {
             const layerId = targetClip.layerId;
+            const clips = this.clipsByLayerId[layerId];
             let overlap = false;
 
-            for (const clip of output.clips) {
-                if (clip.id === targetClip.id || clip.layerId !== layerId) {
+            for (const clip of clips) {
+                if (clip.id === targetClip.id) {
                     continue;
                 }
                 const first  = _.minBy([clip, targetClip], clip => clip.startTime);
@@ -520,10 +547,14 @@ export default {
             }
 
             if (overlap) {
-                const layerIndex = this.layerIndexesById[targetClip.layerId];
-                const layer = output.layers[layerIndex];
+                const output = this.getOutputForClip(clip);
+                const layerIndex = output.layerIds.indexOf(layerId);
+                const layer = this.layersById[layerId];
                 this.addLayer(output, layerIndex+1, layer.blendingMode, [targetClip]);
             }
+        },
+        setMode(layer, mode) {
+            layer.blendingMode = mode;
         },
 
         togglePlay() {
@@ -549,13 +580,22 @@ export default {
             }
             this.request_id = null;
         },
+        onStop() {
+            this.runstate = RunState.Stopped;
+        },
         stop() {
             this.pause();
             this.time = 0;
             currentModel.display_only = false;
             this.timeline.stop();
             this.glReset();
-        }
+        },
+        openMenu(event, layer) {
+            this.$refs.menu.open(event, layer);
+            this.$nextTick(() => {
+                this.$refs.menu.$el.scrollTop = 0;
+            });
+        },
     },
 };
 </script>
@@ -571,16 +611,7 @@ export default {
     width: 100%;
 }
 
-.output {
-    border-bottom: 1px solid $panel-dark;
-    position: absolute;
-    width: 100%;
-    .name {
-        width: 100%;
-        display: flex;
-        align-items: center;
-    }
-}
+.item 
 
 .target {
   position: relative;
@@ -606,9 +637,76 @@ export default {
     overflow-y: scroll;
 }
 
-.output-list {
-    position: relative;
+.v-context {
+  background-color: $panel-bg;
+  color: $panel-text;
+
+  height: 10em;
+  overflow-y: scroll;
+
+  li {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+
+    div {
+      flex: 1;
+    }
+
+    span {
+      display: none;
+    }
+
+    &.selected {
+      background-color: $accent;
+      color: $accent-text;
+      span {
+        display: block;
+        width: 2em;
+      }
+    }
+  }
+
+  li:hover {
+    background-color: $panel-light;
+
+    &.selected {
+      background-color: $control-highlight;
+    }
+  }
+
+}
+
+
+.sidebar {
+    display: flex;
     border-right: 1px solid $panel-dark;
+
+    .layers {
+        position: relative;
+        width: 2em;
+    }
+
+    .outputs {
+        position: relative;
+        flex: 1;
+    }
+
+    .item {
+      border-bottom: 1px dotted $panel-dark;
+      box-sizing: border-box;
+      position: absolute;
+      width: 100%;
+      .label {
+        width: 100%;
+        display: flex;
+        align-items: center;
+      }
+
+      &.last {
+        border-bottom: 1px solid $panel-darker;
+      }
+    }
 }
 
 .patterns {
@@ -638,14 +736,13 @@ export default {
         fill: $panel-text;
     }
 
-    .output {
-        fill: $panel-bg;
-    }
-
     .layer {
-        stroke-width: 1;
-        stroke: $panel-dark;
+        stroke: none;
         fill: none;
+    }
+    .layer-line {
+        stroke-width: 1;
+        stroke: darken($panel-bg, 5%);
     }
 }
 
