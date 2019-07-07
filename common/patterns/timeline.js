@@ -16,15 +16,24 @@ export default class Timeline {
         this.clips = [];
         this.clipsById = new Map();
 
+        const width = this.model.textureWidth;
+        const height = width;
+        const blackArray = new Float32Array(width * width * 4);
+
+        const textureOptions = {
+            src: blackArray,
+            ...getFloatingPointTextureOptions(gl, width, height),
+        };
+
+        this.initialTexture = twgl.createTexture(gl, textureOptions);
+
         const uniforms = {
             texForeground: null,
-            texBackground: null,
+            texBackground: this.initialTexture,
             blendMode: 1,
             opacity: 0,
         };
 
-        const width = this.model.textureWidth;
-        const height = width;
 
         this.mixer = new ShaderRunner({
             gl,
@@ -35,13 +44,6 @@ export default class Timeline {
             uniforms,
         });
 
-        const blackArray = new Float32Array(width * width * 4);
-        const textureOptions = {
-            src: blackArray,
-            ...getFloatingPointTextureOptions(gl, width, height),
-        };
-
-        this.initalTexture = twgl.createTexture(gl, textureOptions);
         this.uniforms = uniforms;
     }
 

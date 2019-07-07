@@ -103,11 +103,6 @@
 </template>
 
 <script>
-/*
-
-      <!--
-      -->
-      */
 import { VueContext } from 'vue-context';
 import * as d3 from 'd3';
 import _ from 'lodash';
@@ -359,6 +354,7 @@ export default {
         runnableClips: {
             handler(clipList) {
                 this.timeline.updateClips(clipList);
+                this.glReset();
             },
         },
         runstate(state) {
@@ -385,6 +381,7 @@ export default {
         const {renderer} = viewports.getViewport('main');
         const gl = renderer.getContext();
         this.timeline = new Timeline(gl, currentModel);
+        this.glReset();
 
         const initialOutputGroups = [this.group_list[0]];
         this.addOutput(initialOutputGroups);
